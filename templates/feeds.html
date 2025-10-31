@@ -1,0 +1,586 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Feeds{% endblock %}
+
+{% block content %}
+<section class="panel feed-hero">
+    <div>
+        <h1>Manage podcast sources</h1>
+        <p>Keep Civic Soundscapes fresh by adding new RSS feeds or importing batches from your curation spreadsheet. We’ll validate each feed before it hits the catalogue.</p>
+        <div class="feed-hero-actions">
+            <a class="cta" href="{{ url_for('podcast_list') }}">View all podcasts</a>
+            <a class="cta tertiary" href="{{ url_for('transcript_list') }}">Browse transcripts</a>
+        </div>
+    </div>
+    <div class="feed-hero-stats">
+        <div class="hero-stat">
+            <span class="hero-stat-value">{{ feeds|length }}</span>
+            <span class="hero-stat-label">Tracked feeds</span>
+        </div>
+        <div class="hero-hint">
+            <span>Tip: Add new sources here and the ingestion pipeline will pick them up automatically.</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Capture New Feeds</h2>
+            <p class="panel-subtitle">Paste a single RSS link or upload a CSV manifest—your choice.</p>
+        </div>
+        <div class="feed-actions">
+            <a class="cta tertiary" href="{{ url_for('transcript_list') }}">View transcripts →</a>
+        </div>
+    </div>
+
+    <div class="feed-ingest-grid">
+        <div class="feed-ingest-card">
+            <div class="feed-ingest-header">
+                <span class="feed-icon">🛰️</span>
+                <div>
+                    <h3>Capture feeds your way</h3>
+                    <p>Paste a single RSS link or drop in a curated CSV manifest.</p>
+                </div>
+            </div>
+
+            <div class="ingest-mode-toggle" role="tablist" aria-label="Feed capture mode">
+                <button type="button" class="ingest-toggle active" data-ingest-mode="single" aria-selected="true" id="single-feed-tab" role="tab" tabindex="0" aria-controls="single-feed-form">
+                    Single feed
+                </button>
+                <button type="button" class="ingest-toggle" data-ingest-mode="csv" aria-selected="false" id="csv-feed-tab" role="tab" tabindex="-1" aria-controls="csv-feed-form">
+                    Bulk CSV
+                </button>
+            </div>
+
+    {% if errors %}
+    <div class="alert error">
+        <ul>
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert success">
+        <p>{{ success }}</p>
+        {% if import_stats and import_stats.skipped %}
+            <p>Skipped {{ import_stats.skipped }} duplicate or invalid row(s).</p>
+        {% endif %}
+    </div>
+    {% elif import_stats and import_stats.skipped %}
+    <div class="alert info">
+        <p>Skipped {{ import_stats.skipped }} duplicate or invalid row(s).</p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="form-grid ingest-panel active" id="single-feed-form" data-mode="single" role="tabpanel" aria-labelledby="single-feed-tab" aria-hidden="false">
+        <input type="hidden" name="form_type" value="single">
+        <input type="hidden" name="name" id="feed-name" value="{{ request.form.get('name', '') }}">
+        <label>
+            <span>RSS feed URL</span>
+            <div class="input-with-action">
+                <input type="url" name="rss_url" id="feed-url" value="{{ request.form.get('rss_url', '') }}" required placeholder="https://example.com/feed.xml">
+                <button type="button" class="cta tertiary" id="preview-feed" title="Fetch metadata">
+                    <span class="icon">🔍</span><span class="text">Scan</span>
+                </button>
+            </div>
+            <small class="hint">Auto-fill grabs the podcast title, language, and category when the feed exposes them.</small>
+        </label>
+        <label>
+            <span>Category <small>(optional)</small></span>
+            <input type="text" name="category" id="feed-category" value="{{ request.form.get('category', '') }}">
+        </label>
+        <label>
+            <span>Language <small>(optional)</small></span>
+            <input type="text" name="language" id="feed-language" value="{{ request.form.get('language', '') }}" placeholder="en">
+        </label>
+        <p id="feed-preview-status" class="preview-status" hidden></p>
+        <div class="form-actions">
+            <button type="submit" class="cta">Add feed</button>
+        </div>
+    </form>
+
+    <form method="post" enctype="multipart/form-data" class="form-grid ingest-panel" id="csv-feed-form" data-mode="csv" role="tabpanel" aria-labelledby="csv-feed-tab" aria-hidden="true">
+        <input type="hidden" name="form_type" value="csv">
+        <label>
+            <span>CSV file</span>
+            <div class="input-with-action">
+                <input type="file" name="csv_file" accept=".csv,text/csv" required>
+            </div>
+        </label>
+        <div class="form-actions">
+            <button type="submit" class="cta secondary">Import CSV</button>
+        </div>
+    </form>
+
+    <div class="ingest-panel tips" data-mode="csv" role="note" aria-live="polite" aria-hidden="true">
+        <ul class="feed-tip-list">
+            <li>Required columns: <code>podcast_name,rss_url</code></li>
+            <li>Optional columns: <code>category,language</code></li>
+            <li>We’ll skip duplicates automatically.</li>
+        </ul>
+    </div>
+        </div>
+
+        <div class="feed-ingest-card pipeline-import-card">
+            <div class="feed-ingest-header">
+                <span class="feed-icon">🎙️</span>
+                <div>
+                    <h3>Run ingestion pipeline</h3>
+                    <p>Fetch fresh episodes and transcribe them without leaving the admin.</p>
+                </div>
+            </div>
+            <p class="import-description">
+                Database <code>{{ pipeline_defaults.db_path }}</code> → Output <code>{{ pipeline_defaults.output_dir }}</code>.
+            </p>
+            <div class="import-controls" id="pipeline-import-app"
+                 data-start-url="{{ url_for('start_pipeline_run') }}"
+                 data-status-url="{{ url_for('pipeline_status') }}"
+                 data-jobs-url="{{ url_for('list_pipeline_jobs') }}"
+                 data-active-job-id="{{ active_pipeline_job_id or '' }}"
+                 data-default-model="{{ pipeline_defaults.model }}"
+                 data-default-max-episodes="{{ pipeline_defaults.max_episodes }}">
+                <button type="button" class="cta secondary" id="start-pipeline-run">Start pipeline run</button>
+                <div class="import-progress" id="pipeline-progress-container" hidden>
+                    <div class="progress-label">
+                        <span id="pipeline-status-text">Ready when you are.</span>
+                        <span id="pipeline-progress-percent">0%</span>
+                    </div>
+                    <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="pipeline-progress-bar">
+                        <div class="progress-fill" id="pipeline-progress-fill"></div>
+                    </div>
+                    <div class="import-stats" id="pipeline-stats">
+                        <span><strong>Feeds</strong> <span id="pipeline-feeds-processed">0</span>/<span id="pipeline-feeds-total">0</span></span>
+                        <span><strong>Episodes</strong> <span id="pipeline-episodes-processed">0</span></span>
+                        <span><strong>Transcribed</strong> <span id="pipeline-created-count">0</span></span>
+                        <span><strong>Skipped</strong> <span id="pipeline-skipped-count">0</span></span>
+                        <span><strong>Failed</strong> <span id="pipeline-failed-count">0</span></span>
+                    </div>
+                    <ul class="import-messages" id="pipeline-messages" aria-live="polite"></ul>
+                    <details class="import-log" id="pipeline-log-wrapper">
+                        <summary>Latest log tail</summary>
+                        <pre id="pipeline-log-tail" class="import-log__body"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Tracked Feeds</h2>
+            <p>Feeds stored in the database. Remove duplicates before importing to avoid skipped rows.</p>
+        </div>
+    </div>
+    <table class="episodes-table">
+        <thead>
+            <tr>
+                <th>Podcast</th>
+                <th>RSS URL</th>
+                <th>Category</th>
+                <th>Language</th>
+                <th>Added</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for feed in feeds %}
+            <tr>
+                <form method="post" class="feed-row-form">
+                    <input type="hidden" name="feed_id" value="{{ feed.id }}">
+                    <td><input class="feed-row-input" type="text" name="name" value="{{ feed.name }}" required></td>
+                    <td><input class="feed-row-input" type="url" name="rss_url" value="{{ feed.rss_url }}" required></td>
+                    <td><input class="feed-row-input" type="text" name="category" value="{{ feed.category or '' }}" placeholder="optional"></td>
+                    <td><input class="feed-row-input" type="text" name="language" value="{{ feed.language or '' }}" placeholder="en"></td>
+                    <td>{{ feed.created_at.strftime("%Y-%m-%d %H:%M") if feed.created_at else "—" }}</td>
+                    <td class="feed-row-actions">
+                        <button class="cta tertiary" type="submit" name="form_type" value="update">Save</button>
+                        <button class="cta danger" type="submit" name="form_type" value="delete" formnovalidate onclick="return confirm('Remove this feed? This will stop future ingests for it.');">Delete</button>
+                    </td>
+                </form>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="6">No feeds stored yet. Add one above to get started.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const urlInput = document.getElementById('feed-url');
+  const nameInput = document.getElementById('feed-name');
+  const categoryInput = document.getElementById('feed-category');
+  const languageInput = document.getElementById('feed-language');
+  const statusEl = document.getElementById('feed-preview-status');
+  const previewButton = document.getElementById('preview-feed');
+  const modeButtons = Array.from(document.querySelectorAll('.ingest-toggle'));
+  const panels = Array.from(document.querySelectorAll('.ingest-panel'));
+
+  const showStatus = (message, type = 'info') => {
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `preview-status ${type}`;
+    statusEl.hidden = !message;
+  };
+
+  const applyMetadata = (data) => {
+    if (data.title && !nameInput.value) {
+      nameInput.value = data.title;
+    }
+    if (data.category && !categoryInput.value) {
+      categoryInput.value = data.category;
+    }
+    if (data.language && !languageInput.value) {
+      languageInput.value = data.language;
+    }
+  };
+
+  const fetchPreview = async () => {
+    const url = urlInput.value.trim();
+    if (!url) {
+      showStatus('Enter an RSS link first.', 'error');
+      urlInput.focus();
+      return;
+    }
+    showStatus('Looking up feed metadata…');
+    try {
+      const response = await fetch('{{ url_for("feed_preview") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rss_url: url })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to fetch feed');
+      }
+      applyMetadata(payload);
+      showStatus('Feed metadata fetched. Review and submit when ready.', 'success');
+    } catch (error) {
+      console.error(error);
+      showStatus(error.message || 'Failed to fetch feed metadata.', 'error');
+    }
+  };
+
+  const setMode = (mode) => {
+    modeButtons.forEach((button) => {
+      const isActive = button.dataset.ingestMode === mode;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+      button.setAttribute('tabindex', isActive ? '0' : '-1');
+    });
+
+    panels.forEach((panel) => {
+      const isActive = panel.dataset.mode === mode;
+      panel.classList.toggle('active', isActive);
+      panel.setAttribute('aria-hidden', String(!isActive));
+    });
+
+    if (statusEl) {
+      if (mode === 'single' && statusEl.textContent) {
+        statusEl.hidden = false;
+      } else {
+        statusEl.hidden = true;
+      }
+    }
+  };
+
+  if (modeButtons.length && panels.length) {
+    const defaultMode =
+      modeButtons.find((button) => button.classList.contains('active'))?.dataset.ingestMode ||
+      'single';
+    setMode(defaultMode);
+    modeButtons.forEach((button) => {
+      button.addEventListener('click', () => setMode(button.dataset.ingestMode));
+    });
+  }
+
+  if (previewButton) {
+    previewButton.addEventListener('click', fetchPreview);
+  }
+  if (urlInput) {
+    urlInput.addEventListener('blur', () => {
+      if (urlInput.value && !nameInput.value) {
+        fetchPreview();
+      }
+    });
+  }
+
+  const pipelineApp = document.getElementById('pipeline-import-app');
+  if (pipelineApp) {
+    const startButton = document.getElementById('start-pipeline-run');
+    const progressContainer = document.getElementById('pipeline-progress-container');
+    const progressFill = document.getElementById('pipeline-progress-fill');
+    const progressPercent = document.getElementById('pipeline-progress-percent');
+    const progressBar = document.getElementById('pipeline-progress-bar');
+    const statusText = document.getElementById('pipeline-status-text');
+    const feedsProcessedEl = document.getElementById('pipeline-feeds-processed');
+    const feedsTotalEl = document.getElementById('pipeline-feeds-total');
+    const episodesProcessedEl = document.getElementById('pipeline-episodes-processed');
+    const createdCountEl = document.getElementById('pipeline-created-count');
+    const skippedCountEl = document.getElementById('pipeline-skipped-count');
+    const failedCountEl = document.getElementById('pipeline-failed-count');
+    const messageList = document.getElementById('pipeline-messages');
+    const logTail = document.getElementById('pipeline-log-tail');
+    const logWrapper = document.getElementById('pipeline-log-wrapper');
+
+    const startUrl = pipelineApp.dataset.startUrl || '';
+    const statusUrl = pipelineApp.dataset.statusUrl || '';
+    const jobsUrl = pipelineApp.dataset.jobsUrl || '';
+    let activeJobId = pipelineApp.dataset.activeJobId || null;
+    let pollTimer = null;
+
+    const stageLabels = {
+      queued: 'Queued and waiting…',
+      start: 'Initialising pipeline…',
+      initialising: 'Initialising pipeline…',
+      fetch_feed: 'Fetching feed…',
+      feed_empty: 'No episodes detected for this feed.',
+      feed_complete: 'Finished processing feed.',
+      episode_start: 'Preparing episode…',
+      episode_transcribed: 'Episode transcribed.',
+      episode_skipped: 'Episode already transcribed.',
+      episode_failed: 'Episode failed.',
+      completed: 'Pipeline run complete.',
+      failed: 'Pipeline run failed.',
+    };
+
+    const setButtonState = (loading) => {
+      if (!startButton) return;
+      startButton.disabled = loading;
+      startButton.textContent = loading ? 'Pipeline running…' : 'Start pipeline run';
+    };
+
+    const applyMessages = (messages) => {
+      if (!messageList) return;
+      messageList.innerHTML = '';
+      if (Array.isArray(messages) && messages.length) {
+        messages.slice(-8).forEach((message) => {
+          const li = document.createElement('li');
+          li.textContent = message;
+          messageList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.textContent = 'No activity yet.';
+        messageList.appendChild(li);
+      }
+    };
+
+    const applyLogTail = (lines) => {
+      if (!logTail || !logWrapper) return;
+      if (Array.isArray(lines) && lines.length) {
+        logTail.textContent = lines.join('\n');
+        logWrapper.hidden = false;
+      } else {
+        logTail.textContent = '';
+        logWrapper.hidden = true;
+      }
+    };
+
+    const renderStatus = (data) => {
+      if (!progressContainer) return;
+      progressContainer.hidden = false;
+
+      const feedsTotal = Number(data.feeds_total ?? data.total);
+      const feedsProcessed = Number(data.feeds_processed ?? data.processed);
+      let percent = Number(data.percent);
+      if (!Number.isFinite(percent)) {
+        if (Number.isFinite(feedsProcessed) && Number.isFinite(feedsTotal) && feedsTotal > 0) {
+          percent = (feedsProcessed / feedsTotal) * 100;
+        } else {
+          percent = 0;
+        }
+      }
+      percent = Math.min(Math.max(Math.round(percent), 0), 100);
+
+      if (progressFill) {
+        progressFill.style.width = `${percent}%`;
+      }
+      if (progressPercent) {
+        progressPercent.textContent = `${percent}%`;
+      }
+      if (progressBar) {
+        progressBar.setAttribute('aria-valuenow', String(percent));
+      }
+
+      if (feedsProcessedEl) {
+        feedsProcessedEl.textContent = Number.isFinite(feedsProcessed) ? feedsProcessed : 0;
+      }
+      if (feedsTotalEl) {
+        feedsTotalEl.textContent = Number.isFinite(feedsTotal) ? feedsTotal : 0;
+      }
+      if (episodesProcessedEl) {
+        const episodesValue = Number(data.episodes_processed ?? 0);
+        episodesProcessedEl.textContent = Number.isFinite(episodesValue) ? episodesValue : 0;
+      }
+      if (createdCountEl) {
+        const createdValue = Number(data.transcripts_created ?? 0);
+        createdCountEl.textContent = Number.isFinite(createdValue) ? createdValue : 0;
+      }
+      if (skippedCountEl) {
+        const skippedValue = Number(data.transcripts_skipped ?? 0);
+        skippedCountEl.textContent = Number.isFinite(skippedValue) ? skippedValue : 0;
+      }
+      if (failedCountEl) {
+        const failedValue = Number(data.transcripts_failed ?? 0);
+        failedCountEl.textContent = Number.isFinite(failedValue) ? failedValue : 0;
+      }
+
+      const stage = data.stage || data.status;
+      let label = stageLabels[stage] || 'Monitoring pipeline…';
+      if (stage === 'fetch_feed' && data.current_feed) {
+        label = `Fetching feed ${data.current_feed}`;
+      } else if (stage && stage.startsWith('episode_') && data.current_episode) {
+        const capitalised = stage.replace('episode_', '').replace(/_/g, ' ');
+        label = `${capitalised.charAt(0).toUpperCase()}${capitalised.slice(1)}: ${data.current_episode}`;
+      }
+      if (data.status === 'failed') {
+        label = `Failed: ${data.error || 'See logs for details.'}`;
+      } else if (stage === 'completed') {
+        label = 'Pipeline complete. Review the stats below.';
+      }
+      if (statusText) {
+        statusText.textContent = label;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(data, 'messages')) {
+        applyMessages(data.messages);
+      }
+      if (Object.prototype.hasOwnProperty.call(data, 'log_tail')) {
+        applyLogTail(data.log_tail);
+      }
+    };
+
+    const stopPolling = () => {
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const pollStatus = async () => {
+      if (!activeJobId || !statusUrl) {
+        return;
+      }
+      try {
+        const response = await fetch(`${statusUrl}?job_id=${encodeURIComponent(activeJobId)}`, { headers: { 'Accept': 'application/json' } });
+        if (response.status === 404) {
+          stopPolling();
+          setButtonState(false);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Status check failed (HTTP ${response.status}).`);
+        }
+        const payload = await response.json();
+        renderStatus(payload);
+        if (payload.status === 'completed' || payload.status === 'failed') {
+          stopPolling();
+          setButtonState(false);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    const startPolling = () => {
+      if (pollTimer) return;
+      pollTimer = window.setInterval(pollStatus, 2000);
+      pollStatus();
+    };
+
+    const bootstrap = async () => {
+      if (!jobsUrl) {
+        applyMessages([]);
+        applyLogTail([]);
+        return;
+      }
+      try {
+        const response = await fetch(jobsUrl, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) {
+          throw new Error('Unable to load import jobs.');
+        }
+        const payload = await response.json();
+        if (payload.active_job_id) {
+          activeJobId = payload.active_job_id;
+          setButtonState(true);
+          startPolling();
+        } else if (Array.isArray(payload.jobs) && payload.jobs.length) {
+          const latest = payload.jobs[0];
+          renderStatus(latest);
+          if (Object.prototype.hasOwnProperty.call(latest, 'messages')) {
+            applyMessages(latest.messages);
+          }
+          if (Object.prototype.hasOwnProperty.call(latest, 'log_tail')) {
+            applyLogTail(latest.log_tail);
+          }
+          setButtonState(false);
+          if (latest.id && statusUrl) {
+            try {
+              const statusResponse = await fetch(`${statusUrl}?job_id=${encodeURIComponent(latest.id)}`, { headers: { 'Accept': 'application/json' } });
+              if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                renderStatus(statusData);
+              }
+            } catch (statusError) {
+              console.error(statusError);
+            }
+          }
+        } else {
+          applyMessages([]);
+          applyLogTail([]);
+        }
+      } catch (error) {
+        console.error(error);
+        applyMessages([error.message]);
+        applyLogTail([]);
+      }
+    };
+
+    if (startButton && startUrl) {
+      startButton.addEventListener('click', async () => {
+        if (startButton.disabled) return;
+        setButtonState(true);
+        try {
+          const response = await fetch(startUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || `Start failed (HTTP ${response.status}).`);
+          }
+          activeJobId = payload.job_id;
+          progressContainer.hidden = false;
+          applyMessages(['Pipeline queued…']);
+          applyLogTail([]);
+          renderStatus({ percent: 0, stage: 'queued', feeds_total: 0, feeds_processed: 0 });
+          startPolling();
+        } catch (error) {
+          console.error(error);
+          setButtonState(false);
+          progressContainer.hidden = false;
+          applyMessages([error.message]);
+          applyLogTail([]);
+          renderStatus({ percent: 0, stage: 'failed', status: 'failed', error: error.message, feeds_total: 0, feeds_processed: 0 });
+        }
+      });
+    }
+
+    bootstrap();
+  }
+});
+</script>
+{% endblock %}

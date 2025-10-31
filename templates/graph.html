@@ -1,0 +1,1057 @@
+{% extends "base.html" %}
+
+{% block title %}Topic Graph | Civic Soundscapes{% endblock %}
+
+{% block content %}
+<section class="panel topic-graph-hero">
+    <div>
+        <h1>Knowledge Graph</h1>
+        <p>Explore how themes weave across podcasts. Each node is a high-impact keyword; links show episodes that connect those ideas.</p>
+    </div>
+    <div class="graph-stat-grid">
+        <div class="graph-stat-card">
+            <span class="graph-stat-value">{{ summary.keyword_count }}</span>
+            <span class="graph-stat-label">Keywords mapped</span>
+        </div>
+        <div class="graph-stat-card">
+            <span class="graph-stat-value">{{ summary.connection_count }}</span>
+            <span class="graph-stat-label">Connections tracked</span>
+        </div>
+        <div class="graph-stat-card">
+            <span class="graph-stat-value">{{ summary.episode_coverage }}</span>
+            <span class="graph-stat-label">Episodes represented</span>
+        </div>
+        <div class="graph-stat-card">
+            <span class="graph-stat-value">{{ summary.podcast_coverage }}</span>
+            <span class="graph-stat-label">Podcasts contributing</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel topic-graph-panel">
+    <div class="graph-layout">
+        <div class="graph-main">
+            <div class="graph-controls">
+                <label class="graph-slider">
+                    <span class="slider-label">Min connection strength</span>
+                    <input type="range" id="weight-threshold" min="0" max="100" step="1" value="25" />
+                    <span class="slider-value" id="weight-threshold-label">0.25</span>
+                </label>
+                <label class="graph-search">
+                    <span class="search-label">Search keywords or podcasts</span>
+                    <input type="search" id="graph-search" placeholder="Type to highlight nodes..." autocomplete="off">
+                </label>
+                <div class="graph-toggles">
+                    <label>
+                        <input type="checkbox" id="show-labels" checked>
+                        <span>Show labels</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="pin-selected">
+                        <span>Pin selections</span>
+                    </label>
+                </div>
+                <button type="button" class="cta tertiary" id="recompute-graph">Recompute keywords</button>
+                <span class="graph-recompute-status" id="recompute-status" aria-live="polite"></span>
+            </div>
+            <div id="topic-graph-wrapper">
+                <svg id="topic-network"></svg>
+            </div>
+        </div>
+        <aside class="graph-sidebar">
+            <div class="sidebar-section" id="graph-inspector">
+                <h3>Inspector</h3>
+                <div class="inspector-placeholder">
+                    Select a keyword node or link to surface podcast and episode context.
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Top keywords</h3>
+                <ul class="top-keyword-list">
+                    {% for item in summary.top_keywords %}
+                    <li data-keyword="{{ item.keyword }}">
+                        <button type="button">
+                            <span class="keyword-name">{{ item.keyword }}</span>
+                            <span class="keyword-meta">{{ item.episodes }} ep · {{ item.podcasts }} podcasts</span>
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<section class="panel graph-insights">
+    <div class="panel-header">
+        <div>
+            <h2>Network Insights</h2>
+            <p>Quick analyses surfaced from the knowledge graph—use them to spot bridges worth exploring further.</p>
+        </div>
+    </div>
+    <div class="graph-insights-grid">
+        <div class="insight-card">
+            <h3>Strongest keyword bridges</h3>
+            <ol>
+            {% for item in summary.top_connections %}
+                <li>
+                    <span class="insight-primary">{{ item.source }} ↔ {{ item.target }}</span>
+                    <span class="insight-meta">{{ item.episode_count }} shared episodes · score {{ '%.2f'|format(item.weight) }}</span>
+                </li>
+            {% else %}
+                <li class="insight-empty">Not enough overlapping keywords yet.</li>
+            {% endfor %}
+            </ol>
+        </div>
+        <div class="insight-card">
+            <h3>Podcasts acting as bridges</h3>
+            <ol>
+            {% for item in summary.bridge_podcasts %}
+                <li>
+                    <span class="insight-primary">{{ item.podcast }}</span>
+                    <span class="insight-meta">cumulative bridge score {{ '%.2f'|format(item.score) }}</span>
+                </li>
+            {% else %}
+                <li class="insight-empty">No cross-podcast bridges detected yet.</li>
+            {% endfor %}
+            </ol>
+        </div>
+        <div class="insight-card">
+            <h3>Top recurring themes</h3>
+            <ol>
+            {% for item in summary.top_keywords[:8] %}
+                <li>
+                    <span class="insight-primary">{{ item.keyword }}</span>
+                    <span class="insight-meta">{{ item.episodes }} episodes · {{ item.podcasts }} podcasts</span>
+                </li>
+            {% else %}
+                <li class="insight-empty">No keywords yet—run the pipeline first.</li>
+            {% endfor %}
+            </ol>
+        </div>
+    </div>
+</section>
+
+{% set heatmap = summary.keyword_heatmap %}
+{% if heatmap.keywords and heatmap.podcasts %}
+<section class="panel keyword-heatmap">
+    <div class="panel-header">
+        <div>
+            <h2>Keyword Overlap Heatmap</h2>
+            <p>How strongly each podcast leans into the top shared themes. Darker cells mean tighter alignment.</p>
+        </div>
+    </div>
+    <div class="heatmap-wrapper">
+        <table class="heatmap-table">
+            <thead>
+                <tr>
+                    <th>Keyword</th>
+                    {% for podcast in heatmap.podcasts %}
+                        <th>{{ podcast }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for keyword in heatmap.keywords %}
+                {% set row = heatmap.matrix[loop.index0] %}
+                <tr>
+                    <th>{{ keyword }}</th>
+                    {% for value in row %}
+                        {% set intensity = 0 %}
+                        {% if heatmap.max > 0 %}
+                            {% set intensity = value / heatmap.max %}
+                        {% endif %}
+                        <td class="heatmap-cell" style="--intensity: {{ '%.3f'|format(intensity) }};">
+                            {% if value %}{{ '%.2f'|format(value) }}{% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if summary.pca_scatter %}
+<section class="panel pca-panel">
+    <div class="panel-header">
+        <div>
+            <h2>Podcast Similarity (PCA)</h2>
+            <p>Podcasts plotted by their keyword profiles. Points that sit closer together share similar vocabularies.</p>
+        </div>
+    </div>
+    <div class="pca-wrapper">
+        <svg id="pca-scatter"></svg>
+        <div class="pca-tooltip" id="pca-tooltip" hidden></div>
+    </div>
+</section>
+{% endif %}
+
+{% if summary.bridge_leaderboard %}
+<section class="panel bridge-panel">
+    <div class="panel-header">
+        <div>
+            <h2>Bridge Podcast Leaderboard</h2>
+            <p>Keyword pairings that connect the largest number of episodes across different shows.</p>
+        </div>
+    </div>
+    <div class="table-wrapper">
+        <table class="bridge-table">
+            <thead>
+                <tr>
+                    <th>Keyword link</th>
+                    <th>Episodes</th>
+                    <th>Score</th>
+                    <th>Sample Episodes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary.bridge_leaderboard %}
+                <tr>
+                    <td>
+                        <strong>{{ row.source }}</strong> ↔ <strong>{{ row.target }}</strong>
+                        {% if row.keywords %}
+                            <br><span class="insight-meta">Shared keywords: {{ row.keywords }}</span>
+                        {% endif %}
+                        {% if row.top_podcasts %}
+                            <br><span class="insight-meta">Top podcasts: {% for pod in row.top_podcasts %}{{ pod.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.episodes }}</td>
+                    <td>{{ '%.2f'|format(row.score) }}</td>
+                    <td>
+                        {% if row.samples %}
+                            <ul class="sample-list">
+                            {% for ep in row.samples %}
+                                <li>
+                                    <strong>{{ ep.podcast }}</strong>:
+                                    <a href="{{ url_for('episode_detail', podcast_slug=ep.podcast|slugify, episode_id=ep.id) }}">{{ ep.title }}</a>
+                                    {% if ep.call_to_action %}
+                                        <span class="badge badge-action">Call to action</span>
+                                    {% endif %}
+                                    {% if ep.stakeholders %}
+                                        <br><span class="insight-meta">Stakeholders: {{ ep.stakeholders | join(', ') }}</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            <span class="insight-empty">No sample episodes yet.</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if summary.collaboration_suggestions %}
+<section class="panel collaboration-panel">
+    <div class="panel-header">
+        <div>
+            <h2>Collaboration Opportunities</h2>
+            <p>Pairs of podcasts sharing actionable themes or stakeholders—perfect catalysts for civic hacker partnerships.</p>
+        </div>
+    </div>
+    <div class="collaboration-grid">
+        {% for suggestion in summary.collaboration_suggestions %}
+        <article class="collaboration-card">
+            <header>
+                <h3>{{ suggestion.source }} ↔ {{ suggestion.target }}</h3>
+                <span class="collaboration-score">Score {{ '%.2f'|format(suggestion.score) }}</span>
+            </header>
+            {% if suggestion.shared_keywords %}
+            <p class="collaboration-keywords"><strong>Shared keywords:</strong> {{ suggestion.shared_keywords | join(', ') }}</p>
+            {% endif %}
+            <p class="collaboration-meta">
+                {% if suggestion.call_to_action_episodes %}
+                    {{ suggestion.call_to_action_episodes }} episode{{ 's' if suggestion.call_to_action_episodes != 1 else '' }} include explicit calls to action.
+                {% else %}
+                    No explicit calls to action detected in the shared episodes yet.
+                {% endif %}
+            </p>
+            {% if suggestion.top_podcasts %}
+            <p class="collaboration-meta">
+                <strong>Leading podcasts:</strong> {% for pod in suggestion.top_podcasts %}{{ pod.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+            </p>
+            {% endif %}
+            {% if suggestion.stakeholders %}
+            <p class="collaboration-stakeholders"><strong>Shared stakeholders:</strong> {{ suggestion.stakeholders | join(', ') }}</p>
+            {% endif %}
+            {% if suggestion.sample_episodes %}
+            <ul class="sample-list">
+                {% for ep in suggestion.sample_episodes[:2] %}
+                <li>
+                    <strong>{{ ep.podcast }}</strong>:
+                    <a href="{{ url_for('episode_detail', podcast_slug=ep.podcast|slugify, episode_id=ep.id) }}">{{ ep.title }}</a>
+                    {% if ep.call_to_action %}
+                        <span class="badge badge-action">Call to action</span>
+                    {% endif %}
+                    {% if ep.stakeholders %}
+                        <br><span class="insight-meta">Stakeholders: {{ ep.stakeholders | join(', ') }}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </article>
+        {% else %}
+        <p class="insight-empty">No collaboration leads surfaced yet. Try refreshing after more transcripts are ingested.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+const graphData = {{ graph|tojson }};
+const summary = {{ summary|tojson }};
+const wrapper = document.getElementById('topic-graph-wrapper');
+const recomputeButton = document.getElementById('recompute-graph');
+const recomputeStatus = document.getElementById('recompute-status');
+const recomputeUrl = "{{ url_for('graph_recompute') }}";
+const pcaData = {{ summary.pca_scatter|tojson }};
+
+let pcaRenderScheduled = false;
+
+if (recomputeButton) {
+  recomputeButton.addEventListener('click', async () => {
+    if (recomputeStatus) {
+      recomputeStatus.textContent = 'Recomputing keywords…';
+      recomputeStatus.className = 'graph-recompute-status';
+    }
+    recomputeButton.disabled = true;
+    try {
+      const response = await fetch(recomputeUrl, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to recompute keywords.');
+      }
+      if (recomputeStatus) {
+        recomputeStatus.textContent = 'Keywords refreshed.';
+        recomputeStatus.className = 'graph-recompute-status success';
+      }
+      window.location.reload();
+    } catch (error) {
+      recomputeButton.disabled = false;
+      if (recomputeStatus) {
+        recomputeStatus.textContent = error.message || 'Unable to recompute keywords.';
+        recomputeStatus.className = 'graph-recompute-status error';
+      }
+    }
+  });
+}
+
+if (!graphData.nodes.length) {
+  wrapper.innerHTML = '<div class="graph-empty">Not enough keyword data yet. Run the ingestion pipeline after transcripts are available.</div>';
+} else {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svgElement = document.getElementById('topic-network');
+  const minCanvasHeight = 560;
+  const palette = ['#2563eb', '#0ea5e9', '#7c3aed', '#14b8a6', '#f97316', '#facc15', '#ec4899', '#0891b2', '#7dd3fc', '#60a5fa'];
+  let scale = 1;
+  let translateX = 0;
+  let translateY = 0;
+
+  function computeDimensions() {
+    const width = wrapper.clientWidth;
+    const height = Math.max(minCanvasHeight, window.innerHeight * 0.55);
+    svgElement.setAttribute('width', width);
+    svgElement.setAttribute('height', height);
+    return { width, height };
+  }
+
+  let { width, height } = computeDimensions();
+  window.addEventListener('resize', () => {
+    const dims = computeDimensions();
+    width = dims.width;
+    height = dims.height;
+    updatePositions();
+  });
+
+  const rootGroup = document.createElementNS(SVG_NS, 'g');
+  svgElement.appendChild(rootGroup);
+
+  const nodes = graphData.nodes.map((data, index) => ({
+    data,
+    x: width / 2 + (Math.random() - 0.5) * 40,
+    y: height / 2 + (Math.random() - 0.5) * 40,
+    vx: 0,
+    vy: 0,
+    radius: 0,
+    color: palette[index % palette.length],
+  }));
+
+  const nodeMap = new Map(nodes.map(node => [node.data.id, node]));
+  const edges = graphData.links.map(link => {
+    const source = nodeMap.get(link.source);
+    const target = nodeMap.get(link.target);
+    return {
+      data: link,
+      source,
+      target,
+      visible: true,
+      lineEl: null,
+    };
+  });
+
+  const maxValue = nodes.length ? Math.max(...nodes.map(node => node.data.value || 0)) : 1;
+  const minRadius = 14;
+  const maxRadius = 52;
+  nodes.forEach(node => {
+    const ratio = maxValue ? (node.data.value || 0) / maxValue : 0;
+    node.radius = minRadius + (maxRadius - minRadius) * Math.sqrt(ratio);
+  });
+
+  runSimulation(nodes, edges, width, height);
+
+  const edgesGroup = document.createElementNS(SVG_NS, 'g');
+  edgesGroup.setAttribute('class', 'graph-links');
+  rootGroup.appendChild(edgesGroup);
+
+  const nodesGroup = document.createElementNS(SVG_NS, 'g');
+  nodesGroup.setAttribute('class', 'graph-nodes');
+  rootGroup.appendChild(nodesGroup);
+
+  function updateTransform() {
+    rootGroup.setAttribute('transform', `translate(${translateX},${translateY}) scale(${scale})`);
+  }
+
+  const edgeEntries = edges.map(edge => {
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('stroke-width', (1.5 + Math.min(edge.data.weight * 3, 6)).toFixed(2));
+    edgesGroup.appendChild(line);
+    edge.lineEl = line;
+    line.addEventListener('click', event => {
+      event.stopPropagation();
+      highlightLink(edge);
+      updateInspector('link', edge.data);
+    });
+    line.addEventListener('mouseenter', () => {
+      if (!edge.visible) return;
+      if (!line.classList.contains('is-highlighted')) {
+        line.classList.add('is-hover');
+      }
+    });
+    line.addEventListener('mouseleave', () => {
+      line.classList.remove('is-hover');
+    });
+    return edge;
+  });
+
+  const nodeEntries = nodes.map(node => {
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', 'graph-node');
+    nodesGroup.appendChild(group);
+
+    const circle = document.createElementNS(SVG_NS, 'circle');
+    circle.setAttribute('r', node.radius.toFixed(2));
+    circle.setAttribute('fill', node.color);
+    circle.setAttribute('stroke', '#0f172a');
+    circle.setAttribute('stroke-width', '1.2');
+    group.appendChild(circle);
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('class', 'node-label');
+    label.textContent = node.data.label;
+    group.appendChild(label);
+
+    group.addEventListener('mouseenter', () => {
+      if (searchActive) return;
+      highlightNodes([node]);
+    });
+
+    group.addEventListener('mouseleave', () => {
+      if (searchActive) return;
+      if (pinnedNodes.size) {
+        applyPinnedHighlights();
+      } else {
+        resetHighlights();
+      }
+    });
+
+    group.addEventListener('click', event => {
+      event.stopPropagation();
+      if (searchActive) {
+        searchInput.value = '';
+        searchActive = false;
+      }
+      focusNode(node);
+    });
+
+    enableDrag(node, group);
+
+    return { node, group, label };
+  });
+
+  const nodeEntryLookup = new Map(nodeEntries.map(entry => [entry.node.data.id, entry]));
+
+  function runSimulation(nodesList, edgesList, widthValue, heightValue) {
+    const iterations = Math.max(200, nodesList.length * 25);
+    const repulsion = 4800;
+    const springLength = 180;
+    const springStiffness = 0.012;
+    const damping = 0.9;
+
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      for (let i = 0; i < nodesList.length; i += 1) {
+        for (let j = i + 1; j < nodesList.length; j += 1) {
+          const nodeA = nodesList[i];
+          const nodeB = nodesList[j];
+          let dx = nodeB.x - nodeA.x;
+          let dy = nodeB.y - nodeA.y;
+          let distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const force = repulsion / (distance * distance);
+          const fx = (dx / distance) * force;
+          const fy = (dy / distance) * force;
+          nodeA.vx -= fx;
+          nodeA.vy -= fy;
+          nodeB.vx += fx;
+          nodeB.vy += fy;
+        }
+      }
+
+      edgesList.forEach(edge => {
+        const nodeA = edge.source;
+        const nodeB = edge.target;
+        let dx = nodeB.x - nodeA.x;
+        let dy = nodeB.y - nodeA.y;
+        let distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        const displacement = distance - springLength;
+        const force = springStiffness * displacement;
+        const fx = (dx / distance) * force;
+        const fy = (dy / distance) * force;
+        nodeA.vx += fx;
+        nodeA.vy += fy;
+        nodeB.vx -= fx;
+        nodeB.vy -= fy;
+      });
+
+      nodesList.forEach(node => {
+        node.vx *= damping;
+        node.vy *= damping;
+        node.x += node.vx;
+        node.y += node.vy;
+        node.x = Math.max(node.radius, Math.min(widthValue - node.radius, node.x));
+        node.y = Math.max(node.radius, Math.min(heightValue - node.radius, node.y));
+      });
+
+      for (let i = 0; i < nodesList.length; i += 1) {
+        for (let j = i + 1; j < nodesList.length; j += 1) {
+          const nodeA = nodesList[i];
+          const nodeB = nodesList[j];
+          let dx = nodeB.x - nodeA.x;
+          let dy = nodeB.y - nodeA.y;
+          let distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const minDistance = nodeA.radius + nodeB.radius + 16;
+          if (distance < minDistance) {
+            const overlap = (minDistance - distance) / 2;
+            const factor = overlap / distance;
+            dx *= factor;
+            dy *= factor;
+            nodeA.x -= dx;
+            nodeA.y -= dy;
+            nodeB.x += dx;
+            nodeB.y += dy;
+            nodeA.x = Math.max(nodeA.radius, Math.min(widthValue - nodeA.radius, nodeA.x));
+            nodeA.y = Math.max(nodeA.radius, Math.min(heightValue - nodeA.radius, nodeA.y));
+            nodeB.x = Math.max(nodeB.radius, Math.min(widthValue - nodeB.radius, nodeB.x));
+            nodeB.y = Math.max(nodeB.radius, Math.min(heightValue - nodeB.radius, nodeB.y));
+          }
+        }
+      }
+    }
+
+    const avgX = nodesList.reduce((sum, node) => sum + node.x, 0) / nodesList.length;
+    const avgY = nodesList.reduce((sum, node) => sum + node.y, 0) / nodesList.length;
+    const offsetX = widthValue / 2 - avgX;
+    const offsetY = heightValue / 2 - avgY;
+    nodesList.forEach(node => {
+      node.x += offsetX;
+      node.y += offsetY;
+    });
+  }
+
+  function updatePositions() {
+    nodeEntries.forEach(entry => {
+      entry.group.setAttribute('transform', `translate(${entry.node.x},${entry.node.y})`);
+      entry.label.setAttribute('x', '0');
+      entry.label.setAttribute('y', (entry.node.radius + 16).toFixed(2));
+    });
+    edgeEntries.forEach(edge => {
+      edge.lineEl.setAttribute('x1', edge.source.x.toFixed(2));
+      edge.lineEl.setAttribute('y1', edge.source.y.toFixed(2));
+      edge.lineEl.setAttribute('x2', edge.target.x.toFixed(2));
+      edge.lineEl.setAttribute('y2', edge.target.y.toFixed(2));
+    });
+  }
+
+  updatePositions();
+  updateTransform();
+
+  const weightSlider = document.getElementById('weight-threshold');
+  const sliderLabel = document.getElementById('weight-threshold-label');
+  const searchInput = document.getElementById('graph-search');
+  const labelToggle = document.getElementById('show-labels');
+  const pinCheckbox = document.getElementById('pin-selected');
+  const pinnedNodes = new Set();
+  let searchActive = false;
+
+  const weights = edges.map(edge => edge.data.weight);
+  const maxWeight = weights.length ? Math.max(...weights) : 1;
+  const sliderMaxValue = Math.max(100, Math.ceil(maxWeight * 100));
+  weightSlider.max = sliderMaxValue;
+  const initialThreshold = Math.min(maxWeight, 0.25);
+  weightSlider.value = Math.round(initialThreshold * 100);
+  sliderLabel.textContent = initialThreshold.toFixed(2);
+
+  function getVisibleEdges() {
+    return edgeEntries.filter(edge => edge.visible);
+  }
+
+  function highlightNodes(nodesToHighlight) {
+    const visibleEdges = getVisibleEdges();
+    if (!nodesToHighlight || nodesToHighlight.length === 0) {
+      nodeEntries.forEach(entry => entry.group.classList.remove('is-dimmed'));
+      edgeEntries.forEach(edge => {
+        edge.lineEl.classList.remove('is-dimmed', 'is-highlighted', 'is-hover');
+        edge.lineEl.classList.toggle('is-hidden', !edge.visible);
+      });
+      return;
+    }
+
+    const highlightIds = new Set(nodesToHighlight.map(node => node.data.id));
+    const extendedIds = new Set(highlightIds);
+    const highlightedEdges = new Set();
+
+    visibleEdges.forEach(edge => {
+      if (highlightIds.has(edge.source.data.id) || highlightIds.has(edge.target.data.id)) {
+        extendedIds.add(edge.source.data.id);
+        extendedIds.add(edge.target.data.id);
+        highlightedEdges.add(edge);
+      }
+    });
+
+    nodeEntries.forEach(entry => {
+      const shouldDim = extendedIds.size && !extendedIds.has(entry.node.data.id);
+      entry.group.classList.toggle('is-dimmed', shouldDim);
+    });
+
+    edgeEntries.forEach(edge => {
+      const line = edge.lineEl;
+      if (!edge.visible) {
+        line.classList.add('is-hidden');
+        line.classList.remove('is-dimmed', 'is-highlighted', 'is-hover');
+        return;
+      }
+      line.classList.remove('is-hidden', 'is-hover');
+      if (highlightedEdges.has(edge)) {
+        line.classList.add('is-highlighted');
+        line.classList.remove('is-dimmed');
+      } else if (extendedIds.size) {
+        line.classList.add('is-dimmed');
+        line.classList.remove('is-highlighted');
+      } else {
+        line.classList.remove('is-dimmed', 'is-highlighted');
+      }
+    });
+  }
+
+  function resetHighlights() {
+    highlightNodes([]);
+  }
+
+  function applyPinnedHighlights() {
+    if (!pinnedNodes.size) {
+      resetHighlights();
+      updateInspector('clear');
+      return;
+    }
+    const pinnedList = Array.from(pinnedNodes)
+      .map(id => nodeMap.get(id))
+      .filter(Boolean);
+    highlightNodes(pinnedList);
+    const lastPinned = pinnedList[pinnedList.length - 1];
+    if (lastPinned) {
+      updateInspector('node', lastPinned.data);
+    }
+  }
+
+  function focusNode(node) {
+    if (!pinCheckbox.checked) {
+      pinnedNodes.clear();
+    }
+    if (pinCheckbox.checked && pinnedNodes.has(node.data.id)) {
+      pinnedNodes.delete(node.data.id);
+    } else {
+      pinnedNodes.delete(node.data.id);
+      pinnedNodes.add(node.data.id);
+    }
+    applyPinnedHighlights();
+    updateInspector('node', node.data);
+  }
+
+  function highlightLink(edge) {
+    pinnedNodes.clear();
+    highlightNodes([edge.source, edge.target]);
+  }
+
+  function updateThreshold(threshold) {
+    sliderLabel.textContent = threshold.toFixed(2);
+    edgeEntries.forEach(edge => {
+      edge.visible = edge.data.weight >= threshold;
+      edge.lineEl.classList.toggle('is-hidden', !edge.visible);
+    });
+    if (searchActive) {
+      searchInput.dispatchEvent(new Event('input'));
+    } else {
+      applyPinnedHighlights();
+    }
+  }
+
+  weightSlider.addEventListener('input', event => {
+    const threshold = Number(event.target.value) / 100;
+    updateThreshold(threshold);
+  });
+
+  updateThreshold(initialThreshold);
+
+  searchInput.addEventListener('input', event => {
+    const query = event.target.value.trim().toLowerCase();
+    searchActive = Boolean(query);
+    if (!query) {
+      applyPinnedHighlights();
+      return;
+    }
+
+    const matches = new Set();
+    nodes.forEach(node => {
+      const topPodcasts = (node.data.top_podcasts || []).map(item => item.name.toLowerCase());
+      if (node.data.label.toLowerCase().includes(query) || topPodcasts.some(name => name.includes(query))) {
+        matches.add(node.data.id);
+      }
+    });
+
+    nodeEntries.forEach(entry => {
+      entry.group.classList.toggle('is-dimmed', !matches.has(entry.node.data.id));
+    });
+
+    edgeEntries.forEach(edge => {
+      if (!edge.visible) {
+        edge.lineEl.classList.add('is-hidden');
+        return;
+      }
+      const sourceMatch = matches.has(edge.source.data.id);
+      const targetMatch = matches.has(edge.target.data.id);
+      edge.lineEl.classList.toggle('is-dimmed', !(sourceMatch || targetMatch));
+      edge.lineEl.classList.remove('is-hidden', 'is-highlighted', 'is-hover');
+    });
+
+    updateInspector('clear');
+  });
+
+  labelToggle.addEventListener('change', event => {
+    nodeEntries.forEach(entry => {
+      entry.label.classList.toggle('is-hidden', !event.target.checked);
+    });
+  });
+
+  pinCheckbox.addEventListener('change', event => {
+    if (!event.target.checked && pinnedNodes.size) {
+      const lastPinned = Array.from(pinnedNodes).pop();
+      pinnedNodes.clear();
+      if (lastPinned) {
+        pinnedNodes.add(lastPinned);
+      }
+      applyPinnedHighlights();
+    }
+  });
+
+  document.querySelectorAll('.top-keyword-list li button').forEach(button => {
+    button.addEventListener('click', () => {
+      const keyword = button.parentElement.dataset.keyword;
+      const entry = nodeEntryLookup.get(keyword);
+      if (!entry) return;
+      pinnedNodes.clear();
+      pinnedNodes.add(keyword);
+      applyPinnedHighlights();
+      updateInspector('node', entry.node.data);
+      searchInput.value = '';
+      searchActive = false;
+    });
+  });
+
+  svgElement.addEventListener('click', event => {
+    if (event.target !== svgElement) return;
+    if (!pinCheckbox.checked && event.target === svgElement) {
+      pinnedNodes.clear();
+      applyPinnedHighlights();
+    }
+    updateInspector('clear');
+  });
+
+  function enableDrag(node, group) {
+    group.style.cursor = 'grab';
+    group.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      const pointerId = event.pointerId;
+      group.setPointerCapture(pointerId);
+      group.style.cursor = 'grabbing';
+
+      if (searchActive) {
+        searchInput.value = '';
+        searchActive = false;
+      }
+      focusNode(node);
+
+      const move = moveEvent => {
+        const bounds = svgElement.getBoundingClientRect();
+        const x = (moveEvent.clientX - bounds.left - translateX) / scale;
+        const y = (moveEvent.clientY - bounds.top - translateY) / scale;
+        node.x = Math.max(node.radius, Math.min(width - node.radius, x));
+        node.y = Math.max(node.radius, Math.min(height - node.radius, y));
+        updatePositions();
+      };
+
+      const up = () => {
+        group.releasePointerCapture(pointerId);
+        group.style.cursor = 'grab';
+        group.removeEventListener('pointermove', move);
+        group.removeEventListener('pointerup', up);
+        if (!pinCheckbox.checked) {
+          pinnedNodes.clear();
+        }
+        pinnedNodes.add(node.data.id);
+        applyPinnedHighlights();
+      };
+
+      group.addEventListener('pointermove', move);
+      group.addEventListener('pointerup', up);
+    });
+  }
+
+  function updateInspector(type, payload) {
+    const container = document.getElementById('graph-inspector');
+    const placeholderText = 'Select a keyword node or link to surface podcast and episode context.';
+    const existingPlaceholder = container.querySelector('.inspector-placeholder');
+    const panelId = 'inspector-content';
+    let panel = container.querySelector(`#${panelId}`);
+
+    if (type === 'clear') {
+      if (panel) {
+        panel.remove();
+      }
+      if (!existingPlaceholder) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'inspector-placeholder';
+        placeholder.textContent = placeholderText;
+        container.appendChild(placeholder);
+      }
+      return;
+    }
+
+    if (existingPlaceholder) {
+      existingPlaceholder.remove();
+    }
+
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = panelId;
+      panel.className = 'inspector-panel';
+      container.appendChild(panel);
+    }
+
+    if (type === 'node') {
+      const podcasts = (payload.top_podcasts || []).map(item => `<li>${item.name} <span>${item.weight}</span></li>`).join('');
+      panel.innerHTML = `
+        <h4>${payload.label}</h4>
+        <p><strong>${payload.episode_count}</strong> episodes · <strong>${payload.podcast_count}</strong> podcasts</p>
+        ${podcasts ? `<h5>Leading podcasts</h5><ul class="inspector-list">${podcasts}</ul>` : '<p class="inspector-muted">No podcast breakdown available.</p>'}
+      `;
+    } else if (type === 'link') {
+      const episodes = (payload.sample_episodes || []).map(ep => `<li>${ep.title} <span>${ep.podcast}</span></li>`).join('');
+      const podcasts = (payload.top_podcasts || []).map(item => `<li>${item.name} <span>${item.weight}</span></li>`).join('');
+      panel.innerHTML = `
+        <h4>${payload.source} ↔ ${payload.target}</h4>
+        <p><strong>${payload.episode_count}</strong> shared episodes · <strong>${payload.podcast_count}</strong> podcasts</p>
+        ${podcasts ? `<h5>Strongest podcast bridges</h5><ul class="inspector-list">${podcasts}</ul>` : ''}
+        ${episodes ? `<h5>Sample episodes</h5><ul class="inspector-list">${episodes}</ul>` : ''}
+      `;
+    }
+  }
+
+  updateInspector('clear');
+
+  let isPanning = false;
+  let panPointerId = null;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panInitialX = 0;
+  let panInitialY = 0;
+
+  svgElement.addEventListener('pointerdown', event => {
+    if (event.target !== svgElement) {
+      return;
+    }
+    isPanning = true;
+    panPointerId = event.pointerId;
+    svgElement.setPointerCapture(event.pointerId);
+    panStartX = event.clientX;
+    panStartY = event.clientY;
+    panInitialX = translateX;
+    panInitialY = translateY;
+  });
+
+  svgElement.addEventListener('pointermove', event => {
+    if (!isPanning || event.pointerId !== panPointerId) {
+      return;
+    }
+    translateX = panInitialX + (event.clientX - panStartX);
+    translateY = panInitialY + (event.clientY - panStartY);
+    updateTransform();
+  });
+
+  svgElement.addEventListener('pointerup', event => {
+    if (event.pointerId !== panPointerId) {
+      return;
+    }
+    isPanning = false;
+    svgElement.releasePointerCapture(event.pointerId);
+  });
+
+  svgElement.addEventListener('wheel', event => {
+    event.preventDefault();
+    const bounds = svgElement.getBoundingClientRect();
+    const pointerX = event.clientX - bounds.left;
+    const pointerY = event.clientY - bounds.top;
+    const zoomFactor = Math.exp(-event.deltaY / 500);
+    const newScale = Math.min(2.5, Math.max(0.4, scale * zoomFactor));
+    const scaleRatio = newScale / scale;
+    translateX = pointerX - (pointerX - translateX) * scaleRatio;
+    translateY = pointerY - (pointerY - translateY) * scaleRatio;
+    scale = newScale;
+    updateTransform();
+  });
+}
+
+function renderPcaScatter() {
+  const pcaSvg = document.getElementById('pca-scatter');
+  if (!pcaSvg || !pcaData.length) {
+    return;
+  }
+
+  const tooltip = document.getElementById('pca-tooltip');
+  const width = pcaSvg.clientWidth || 640;
+  const height = 320;
+  const padding = 45;
+
+  if (tooltip) {
+    tooltip.hidden = true;
+  }
+
+  const xs = pcaData.map(point => point.x);
+  const ys = pcaData.map(point => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const rangeX = maxX - minX || 1;
+  const rangeY = maxY - minY || 1;
+
+  const projectX = value => padding + ((value - minX) / rangeX) * (width - padding * 2);
+  const projectY = value => height - padding - ((value - minY) / rangeY) * (height - padding * 2);
+
+  pcaSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  while (pcaSvg.firstChild) {
+    pcaSvg.removeChild(pcaSvg.firstChild);
+  }
+
+  const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  axisGroup.setAttribute('stroke', '#cbd5f5');
+  axisGroup.setAttribute('stroke-width', '1');
+  axisGroup.setAttribute('fill', 'none');
+
+  const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  xAxis.setAttribute('x1', String(padding));
+  xAxis.setAttribute('y1', String(projectY(0)));
+  xAxis.setAttribute('x2', String(width - padding));
+  xAxis.setAttribute('y2', String(projectY(0)));
+  axisGroup.appendChild(xAxis);
+
+  const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  yAxis.setAttribute('x1', String(projectX(0)));
+  yAxis.setAttribute('y1', String(padding));
+  yAxis.setAttribute('x2', String(projectX(0)));
+  yAxis.setAttribute('y2', String(height - padding));
+  axisGroup.appendChild(yAxis);
+
+  pcaSvg.appendChild(axisGroup);
+
+  pcaData.forEach(point => {
+    const cx = projectX(point.x);
+    const cy = projectY(point.y);
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', '8');
+    circle.setAttribute('class', 'pca-point');
+    pcaSvg.appendChild(circle);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', String(cx + 10));
+    label.setAttribute('y', String(cy - 10));
+    label.setAttribute('class', 'pca-label');
+    label.textContent = point.podcast;
+    pcaSvg.appendChild(label);
+
+    const keywordsHtml = (point.keywords || [])
+      .map(item => `${item.keyword} (${item.weight.toFixed(2)})`)
+      .join('<br>');
+
+    circle.addEventListener('mouseenter', () => {
+      if (!tooltip) return;
+      tooltip.hidden = false;
+      tooltip.innerHTML = `<strong>${point.podcast}</strong>${keywordsHtml ? '<br>' + keywordsHtml : ''}`;
+    });
+
+    circle.addEventListener('mouseleave', () => {
+      if (!tooltip) return;
+      tooltip.hidden = true;
+    });
+
+    circle.addEventListener('mousemove', event => {
+      if (!tooltip) return;
+      const bounds = pcaSvg.getBoundingClientRect();
+      tooltip.style.left = `${event.clientX - bounds.left}px`;
+      tooltip.style.top = `${event.clientY - bounds.top}px`;
+    });
+  });
+}
+
+if (pcaData.length) {
+  const schedulePcaRender = () => {
+    if (pcaRenderScheduled) return;
+    pcaRenderScheduled = true;
+    requestAnimationFrame(() => {
+      renderPcaScatter();
+      pcaRenderScheduled = false;
+    });
+  };
+
+  schedulePcaRender();
+  window.addEventListener('resize', schedulePcaRender);
+}
+</script>
+{% endblock %}

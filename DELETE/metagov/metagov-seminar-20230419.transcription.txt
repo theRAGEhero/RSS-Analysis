@@ -1,0 +1,429 @@
+Speaker 1: Okay. Cool. Well, thank you, everyone. So this is just for the recording. This is a impromptu MediGov open house event, and the activity that we're we've kind of decided we might try out is doing a kind of collective run through of a user Berry UI UX survey that someone in our community named Yulia has developed for our policy kit. So I'll read through the instructions, and then people can contribute with their voices. And then we'll send this to Julia so that she can look and see what we think. Cool. So getting started. You are an admin of a Slack community called Whole Earth. You want to introduce PolicyKit to your community with the goal of gradually decentralizing your decision making. The first step is to connect PolicyKit to Slack. You want to try out different governance setups, so you choose the testing governance model. Click through the following flow and answer the follow-up questions. Waiting for it to load. Hey. Here we go. Making some progress. Okay. Okay. So the first step is to connect policy kit to Slack. So we would do that here. You you wanna try out different governance setups, so you choose the testing governance model. So there's testing. So what it says here is choose a governance model to get started. Your community's first constitutional policy will reflect the governance model, and then there's three different types. There's testing, dictator, and moderator. So testing, all members of the community have complete access to policy kit actions. Dictator, one user given complete access to control over all policies and actions, and moderator, which mimics a basic moderator and user structure. So we're gonna select testing, and then we're gonna get started. So we have constitutional policies. This is like an introduction, an intro flow. Constitutional policies will determine how your community interacts with policies, roles, and community documents. Policies, craft policies that PolicyKit will run-in your community platform of choice. Roles and permissions. Roles are a way of granting specific permissions to users without having to create individual policies for each one. Roles can also be used to give community members permission to execute actions directly, disregarding any contradicting policies. And then community documents, not all policies within a community can be expressed or enforced via code. A community document is a reflection of your community's values and guidelines and plain text. Alright. So we've finished our first task, and now we have some questions. So how easy was it to understand the purpose and steps of this flow? Maybe since we had everyone on the the people on the call who are participating. What do we think? Too complicated or easy peasy?
+
+Speaker 2: Well, did I miss any of the information while I was transitioning to the other room and plugging in my laptop and anything else? I don't think so. So, I mean, I think it was just introductory information. Correct?
+
+Speaker 1: Mhmm. Yep.
+
+Speaker 2: Went through? Okay. There wasn't any other stuff I had to fill in or anything that I missed. Okay.
+
+Speaker 1: No. Victor? What do you think? Easy? Complicated?
+
+Speaker 3: I'm I'm I just I get the I I I would say probably middle. I'm I just saw the concept are new. That's why.
+
+Speaker 1: Okay. So the concepts are new. So that that's there's some complications in there just conceptually.
+
+Speaker 3: Yeah. For example, that the the testing and also the the with it, testing moderator, declaratory. Yeah. The Mhmm. Probably need to
+
+Speaker 4: know the concept with more detail.
+
+Speaker 1: Okay. Interesting. Yeah. Ben, David, I don't know if you're wanting to participate today, but if you are, rather you like to jump in and contribute. Perfect. Just along for the ride.
+
+Speaker 2: Well, anyway, I I will say something. I it it did introduce roles after it said what different roles were, didn't it? It seemed like that information was in reverse.
+
+Speaker 1: Okay. Right. If I recall.
+
+Speaker 2: So what do I need to do with that? Confusion.
+
+Speaker 1: We'll give it, like, a five. And then okay. So do you have any other thoughts or feedback on the getting started flow for community admin? So I'm hearing sort of, like, roles might come
+
+Speaker 4: out of order with the flow.
+
+Speaker 1: The concepts of dictator, moderator, and testing are conceptually complicated as a first point of entry. Anything else here? Any other thoughts or feedback on this on this flow? No? No? Okay. Cool. And, okay. Based on the flow you've just seen, how would you explain what PolicyKit is to someone who has not heard of it before?
+
+Speaker 2: This is a little quick, but I mean, it's just a way of customizing roles and community norms to create, yeah, whatever, you know, a custom experience, I don't know, for governance.
+
+Speaker 4: Cool.
+
+Speaker 3: How democracy is made.
+
+Speaker 1: There we go. That's it. How how democracy is made, a way of customizing role roles and community norms to create a custom experience for governance. We've got the the the fuller description, and we've got the tagline policy kit, how democracy is made. Cool. And again, of course, Ben and David, you're welcome to just jump in at any point if something speaks to you. Okay. Cool. This is the second of four tasks, edit a constitutional policy. So you want to edit your default constitutional policy to better reflect the community's values. You choose to do it by having a jury of four vote whether someone attempts to make vote whenever someone attempts to make any changes to your community's policy kit set up. Select the testing constitutional policy and choose edit. Change the voting structure from permission to jury. And three, save the changes made. For the purposes of this test, the policy will be renamed automatically.
+
+Speaker 4: Okay.
+
+Speaker 1: I'm gonna hand this. I always like to have it nearby. So the first task is to select the testing constitutional policy and choose edit. Okay. So constitutional policies that are down here, and this is testing. And then we wanna edit this. Here we wanna change the voting structure from permission to jury. So I guess here, change the voting. So it's not clear to me why this is
+
+Speaker 2: Already, I would
+
+Speaker 1: structure change that
+
+Speaker 2: I would make where where I see that the different buttons, under the actions are out of alignment with each other. I would have all the deletes appear in the same column, all the recovers appear in the same column, etcetera. And if there's not an option there, just put a blank.
+
+Speaker 4: Mhmm. Mhmm. Mhmm.
+
+Speaker 1: Yeah. Yeah. For me, also, it's not clear that this is a voting policy or that or that permission has anything to do with voting structure.
+
+Speaker 2: Right. There's no context visible.
+
+Speaker 1: Yeah. So, anyways, we're gonna edit that, and then we've got this governance model that we can choose from here. So in this voting structure, we have governance models, which is this over here.
+
+Speaker 3: By constitution policy, do they include, like, mission statements, things like that?
+
+Speaker 1: Good question. Yeah. I think that's probably under, like, the kind of community documents. So it's probably outside of the scope of this this particular test, but I don't know where that falls, if that's constitutional or if it, like, is a different kind of policy. So that's a good question. So okay. So we can choose a governance model. There's jury, which has some Ibsen lorem. They all have lorem Ibsen. There's election. There's dictator. There's permission. So we're gonna select jury. And then we want to save the changes made. So when we select a jury, we have four jury members. There's two votes two yes votes required for the policy to pass. There's two notes two no votes required to fail. The Slack channel to vote in is general with a drop down menu. And then here's the the message that gets sent to the jury. And this is how it looks. I don't know what voting timer means, but I guess it's, like, how long you have to vote. And then we save. And then Alright.
+
+Speaker 2: I'm very confused about how the jury works. It's the first as soon as two people vote yes. In other words, what's the voting pool? So anyone can make themselves a juror, first of all. Is that the case?
+
+Speaker 1: I I feel like that has something to do with the roles element. So I don't know if that's something that happens in, like, a different kind of task, but my understanding is that it is something that the person who sets up the the policy kit instance can can decide. But perhaps there's also a way of setting it up so it's a pool so anyone can kind of jump into that pool.
+
+Speaker 2: Well, the point is I can't criticize a user interface unless I know what the functionality that to be delivered is. So, I have I feel I don't have. I feel a number of, protests against this approach fundamentally. I have yet to articulate them in my mind. I don't like the idea of I don't know. It just seems too small too small set. If everybody wants to get in on the boat and they should be able to, it just seems logical to me that if, you know so I don't understand the the the purpose of this approach, so my critique is extremely suspect.
+
+Speaker 1: Okay. Well, maybe in the following tasks, we'll we'll we'll we'll learn more about the the flow. Okay. So, apparently, you can either notify the community or not, and we'll confirm that. So the community's policy constitution policy has been established, and we're done. So how how easy was it to understand the purpose and steps of this flow? Anyone wanna throw some numbers out?
+
+Speaker 2: I'm just so like I said, I'm very
+
+Speaker 4: because we got one.
+
+Speaker 2: What am I even dealing with here? Okay. What about green two elements?
+
+Speaker 3: Yeah. Yeah. I'm not quite so so first of all, on the on the on the page on the before that, this page, the four models Yeah. Jury, jury, what is called, dictator. Some dictator will be the most centralized, nondemocratic type of thing. So so the order seems to be, like like, dictator is either not not the top one
+
+Speaker 2: or not. Arbitrary order. Right. I see what you're saying.
+
+Speaker 4: Yeah. Mhmm.
+
+Speaker 3: Mhmm. So that make it, like, just just because because I'm new to this, I don't understand the concept. So that being out of order right? So not in a specific order make it hard to understand the choice.
+
+Speaker 2: Right. You want them on a spectrum from least democratic to most democratic, or at least it seems to be the right approach to our naive thinking about it. Yeah.
+
+Speaker 1: Yeah. Yeah. Yeah. That's a good point. Okay. So how would you explain what a constitutional policy is to someone who has not used PolicyKit before?
+
+Speaker 2: I mean, he explained the constitutional policy. Constitutional policy is the written norms of a community that are to be used alongside any sort of, you know, automated code is law, smart contract nonsense. Oh, sorry. Did I put my personal opinion in there?
+
+Speaker 1: Victor?
+
+Speaker 3: Constitution policy is Mhmm. But that that yeah. Constitution policy and like I said, I have the question about what because what's the difference between constitution policy and policy? That is kinda puzzled me already. So if I just look at it just if I look at the terminology, I think it's probably related to high level guidelines such as mission statement, those kind of thing, and how does it does it are we having a democracy or not?
+
+Speaker 1: What other terms might be used to describe constitutional policies? We can select more than one. We have governing policies, core policies, principal policies, meta policies, or other.
+
+Speaker 2: I mean, governing policies seems pretty reasonable.
+
+Speaker 4: Okay. I like
+
+Speaker 2: it better than constitutional policies, and that's the only one I like better.
+
+Speaker 4: Mhmm. Okay.
+
+Speaker 1: Victor, any thoughts?
+
+Speaker 3: Yeah. I think our targeting policy is good.
+
+Speaker 1: Okay. Nice. Cool. And then do you have any other thoughts or feedback on the policies feature? So one of the comments was the order of governance. Oops.
+
+Speaker 2: This doesn't have anything to do with constitutional policies. Constitutional policies are just the written text. Right? This this good choice of a governance type is not the constitutional policy. That's a separate field than constitutional policies. Correct?
+
+Speaker 1: I mean, I think this speaks to some of the ambiguity, at least in this particular user flow of, like, what a constitutional policy is. I think my understanding is that constitutional policy is those, like, documents of, like, mission and and norms, but it's also, like, kind of like Victor saying, like, are we having a democracy? Like, what is our basic decision making model?
+
+Speaker 2: What's the I thought he was making a clear distinction that it was precisely non algorithmic things. Like, it is precisely just the text, just the Wiki that's being edited.
+
+Speaker 4: Right.
+
+Speaker 2: I just I don't think your your understanding I thought he was very clear on that that the constitution policy is just that mutually edited text of norms. So there's governing policies on one hand. I I don't like constitutional once again. I like governing policies versity versus governing mechanisms. So there's governing policies which are superset of governing mechanisms, which are described by the governing policy. That's how I would set it up as far as if I were designing this from a conceptual standpoint.
+
+Speaker 1: Can you say that again?
+
+Speaker 2: In other words, I would redefine because it seems to fit your intuition better as well, the governing policies as defining both the non algorithmic and the algorithmic techniques, governing mechanisms slash governing mechanisms. That is a superset of both. But this is principally done through text. In other words, you say, like, we're using this governing mechanism here, and that's all you need to do. And that's what your governing policy is. It's your, you know, the group selecting a particular governing mechanism. If they need one, maybe they have conversation as their governing mechanism. Maybe they have a decision making tool. The point is that there are a lot of governing mechanisms, both, algorithmic and non algorithmic, I guess, that could be defined inside of the constitutional or governing policies.
+
+Speaker 4: Cool.
+
+Speaker 1: That one needs to see how how good of a speller I am.
+
+Speaker 2: And in fact, you can listen and type out. I I can't take dictation myself, so it's right there.
+
+Speaker 1: Victor, any thoughts here?
+
+Speaker 3: I I actually forgot what it looks like, the first page. I think constitution policy versus government policy, I just remember because constitution just the word because that remind me of the constitution. Right? So that's the highest level. That's all I
+
+Speaker 2: remember. Yeah. Okay. So you're you're arguing again that constitutional might still be the better term. I don't hate constitutional. I'm just saying that I prefer governing policies, I think.
+
+Speaker 4: Yeah. Yeah. Yeah. Yeah. Okay. Let's
+
+Speaker 1: continue. Okay. This is the third of four tasks. We're gonna add a custom policy. So you wanna create a custom policy to vote for who can join conversations in the community Slack channels. Step one is to add a is to select the add policy. Step two is to click through the building blocks of a policy one by one. Step three is to select a jury voting structure. Step four is to add a post message action to both pass and fail blocks. And then five, once you've gone through all blocks, save the policy. For the purposes of this test, the details of the building blocks of the policy will be filled out automatically as you click through them. Step one, select to add policy. Okay. I think this is what we're supposed to look for. So we have add policies to govern your community. Let's look at this a little closer and get into it. Right? So we have meta governance, which inside of there is the constitutional policies, the community documents, and the roles. Okay. So we're gonna add policies. We're gonna make a custom policy. We're gonna click through the building blocks of a policy one by one. So actions.
+
+Speaker 2: Yeah. Little confusion here.
+
+Speaker 1: Yeah. The is it oh, it was okay. Over here.
+
+Speaker 4: Okay. I think it so
+
+Speaker 1: I think what you probably end up doing is you do you're supposed to click this. Okay. So that's I think it's clear. That's a little confusing. Like, I wanna just be able to
+
+Speaker 4: click on this. Yes. Obviously, yes.
+
+Speaker 1: Yeah. You wanna create a custom policy to vote for who can join conversations. So I guess, like, since the thing that we're trying to do is oh, okay. So there are the actions to govern. Post message, rename conversation, join conversation, and message, schedule message.
+
+Speaker 2: This is saying this is, like, selecting the subject line over here on the right. Exactly. Yeah.
+
+Speaker 1: Yeah. Interesting. Right now it's got permissions
+
+Speaker 2: underneath that on a drop down menu. What's under there?
+
+Speaker 1: Yeah. That's not clickable yet. Oh. I I think it says that the details of the building blocks would be filled out automatically. So I think we just we just get what we get. This is the dictatorial user experience flow. Oh, okay.
+
+Speaker 2: Because I was actually gonna actually come up with a solution here that I wanted, you know, that I think should be implemented.
+
+Speaker 1: Yeah.
+
+Speaker 2: But okay.
+
+Speaker 1: Alright. Cool. So that's the action. Cool. Let's select. We have a again, a policy, which which really is like a governance model, which is really a voting structure, which is unclear. This is like three things getting mixed together, but we're just to select a jury.
+
+Speaker 2: Okay. Well, so already, this model is insufficient to me. Like, just having voting on whether someone should be added to a group. How do I bring in additional data that's relevant to this voting process that's sort of integrated with the voting process? In other words, I'm thinking specifically of a humanity verification service of which there are green check is one I know that's being developed right now. So I would say you have to have be verified as human by green check before you're allowed to be a member. So or some other humanity verification service. So that is not anywhere in this interface where I would be able to say that I think that that should be the policy.
+
+Speaker 1: Sure. Yeah. So there are there's maybe, like, two parts here. So, like, PolicyKit, like, as, like, my understanding is that it's possible to go into policy kit and kind of write some custom code in Python that would also allow you to integrate with external APIs
+
+Speaker 4: Okay.
+
+Speaker 1: Services. So you could, I think, in theory, write a policy that allowed that kind of integration with something like GreenCheck.
+
+Speaker 4: Okay.
+
+Speaker 1: But that wouldn't like, in this kind of more, like, no code interface, which inherently kind of limits the scope of what Right.
+
+Speaker 4: Okay. I'm gonna
+
+Speaker 2: This is simply not the solution for this problem. But okay. Within the context of not actually solving the problem, let's go back to the interface.
+
+Speaker 1: Yeah. Yeah. Yeah. Okay. So we've added Jerry, and we're just gonna accept those defaults. Add a post message action to both pass and fail. So I gotta come over here and choose a follow-up action. So when action passes, do this. So for me, some, like, nesting of hierarchy could be useful here just so I can see what this flows from because it looks very similar to what we were looking at before. Like, if I could see, like, join conversation and then all of these underneath that, I think that would be a little more clear. But, anyways, post message. Next. Same. Post message. This is when the action fails, and this is what gets sent. And then once you've got through all of that, save the policy.
+
+Speaker 2: I mean, to be fair, obviously, for a Slack channel, it's not humanity verification is not that critical, but it's gonna be more and more so. What within the year, we're all gonna be screaming for it.
+
+Speaker 1: Sure. Yes. Yeah. Yeah. Yeah. I heard someone mentioned they were like, it'd be fun to have, like it'd be interesting to, like, have, like, a camera manufacturers be able to have, like, an encrypted string that's, like, embedded in the image to kind of show that it was produced by a physical object rather than generated by a computer. I don't know how much how many how much, like, that actually has any legs. But, yeah, I think there's gonna be more and more, like, creative kinds of thinking around how do we actually kind of distinguish agency.
+
+Speaker 2: Yeah. No. Yeah. Provenance questions are
+
+Speaker 4: Yeah. Yeah. Yeah. Yeah. Okay.
+
+Speaker 1: How easy was it to understand the purpose and steps of this flow? Just the purpose and the steps, and then we'll go into more detail like we have in the past.
+
+Speaker 2: I always thought it was okay. It's
+
+Speaker 1: pretty good. Okay.
+
+Speaker 2: I'd say five.
+
+Speaker 1: Five? Okay. Victor?
+
+Speaker 3: Yeah. That 5, I think, is good.
+
+Speaker 4: 5? Okay. Cool.
+
+Speaker 3: Just a just a Slack part is a little just to don't know what the each of the actions are for, but Mhmm. Overall overall, it's clear.
+
+Speaker 1: Okay. Okay. How would you explain what a policy is to someone who's not used PolicyKit before?
+
+Speaker 2: Isn't this kind of the same question? I mean, I'm I'm a little I'm a little confused. Let's see. So when's the policy? I I don't know. I'm I'm kind of I'm my brain has become garbled. So
+
+Speaker 1: I think there's probably, like, some distinction between, like, a constitution policy and then, like Yeah.
+
+Speaker 2: I don't know what
+
+Speaker 1: that distinction is. To the constitution policy.
+
+Speaker 3: Is it just a possibly policy kit helps you make decisions how about how decisions made?
+
+Speaker 1: Yeah. I think, like, a different name for this would be useful. Also, I mean, not everything is a policy. Like, I don't know. There's a platform called Murmur that I don't know. I can't remember how they do it, but they they distinguish between, like, policies and actions and norms and all that.
+
+Speaker 2: Yeah. Yeah. That's what I mean. Right? A different synonym. Mhmm. But that's still
+
+Speaker 4: the Guard
+
+Speaker 3: would be nice. Guardrail?
+
+Speaker 1: Mhmm. Mhmm.
+
+Speaker 2: A methodology, once again, because the policy includes abstract concepts and norms, whereas this is a specific, you know, implementation, a specific being specified. I mean Mhmm. Specific is the is you'll need both of those specifics in there. But
+
+Speaker 1: Well, look, you know, I'm just I'm just specific. Yeah. I think, like, a more expressive kind of, like, topology of what it is that's being implemented could be useful. Okay. Do you have any other thoughts or feedback on the policies feature? Victor?
+
+Speaker 3: Yes. That sounds interesting concept. Yeah. I mean, about the it's it's I think the the the the the tool itself is is great good introduction to people who, you know, understand the features. So it it only has doesn't have too many choices because I'm when I was going through the communities and looking at the governance models and just listening to the governance models, it looks like there are many kinds. So I just wonder, does this cover all possibility possible choices?
+
+Speaker 2: No. It doesn't.
+
+Speaker 1: No. Of course. Yeah. It
+
+Speaker 4: doesn't. No.
+
+Speaker 2: It's obviously just a a a kind of stand in of a number of features which I will be expanded with more options, I'm assuming. It's just sort of creating the overall feature structure that I think he's doing here.
+
+Speaker 3: Yeah. Oh, okay.
+
+Speaker 1: Any more thoughts, feedback, or should we move on to the last task?
+
+Speaker 2: Move on. I don't really like anything that like like, on Twitter, when you, like, have a bunch of messages and you have to get to the bottom of the window to type a new message. I hate this whole interface. So you'll skip the with this question and continue. I hate that there's just a arbitrary, a large amount of white space, and then in the Oh
+
+Speaker 4: my god.
+
+Speaker 3: Thing that I wanna type in
+
+Speaker 2: is at the bottom of the window. I hate that as a design principle in general.
+
+Speaker 1: Yeah. Yeah. Yeah. Well, we well, we gotta do the use berry use berry test where we, like, critique useberry. We'll we'll do that next week.
+
+Speaker 2: Useberry. Okay. Useberry is the one responsible for that?
+
+Speaker 1: Yeah. Yeah. Yeah. Yeah. That's yeah. That's the app. That's It's a norm
+
+Speaker 2: in the industry, and it's a terrible norm.
+
+Speaker 1: Yeah. Yeah. Yeah. Yeah. But, anyway, I I agree. Okay. So I didn't know All I
+
+Speaker 2: am is a griefer, by the way. I don't know if you've noticed, but I'm basically the world's biggest hater. I try to be productive with it, but that's what I am, is a hater.
+
+Speaker 1: Yeah. Yeah. I I really just like like large headers or, like, nav headers on websites where it's, like, a third of the screen is just a header. So I I I I feel that
+
+Speaker 4: I feel
+
+Speaker 1: that bad.
+
+Speaker 2: Okay. You feel me. Alright. I I got it. Okay.
+
+Speaker 1: Alright. Step four. Add a new role with a special permission. You wanna create a new role called member to allow selected members to add new policies directly without anyone voting. The permissions of this role would therefore override any policies indicating that such action requires community approval. Step one, add a role. Step two, change the permissions to include one special permission, which is adding new policies. And step three, save the role.
+
+Speaker 2: Once again, I love that continue button. That was a great implementation of a continue button.
+
+Speaker 1: Okay. Let's go ahead and pin that. Alright. So step one is to add a role. So we got our roles down here. We have we have an admin role. We're gonna add a name. And we're gonna change the permissions to include one special permission, which is adding new policies. So there's there's the kind of default permissions, and this is for this new member role, which has already been filled out. And we're gonna do adding new policies. So there's constitution policies, policies, roles, community documents, Slack permissions.
+
+Speaker 4: Okay.
+
+Speaker 1: Something about the wording of this and this are out of sync with each other, but that's that. I'd love to see what that question mark says. I'm gonna save and confirm. Okay. And that was it. That was an easy task.
+
+Speaker 2: Alright. So it seems like what he's doing here is he's got a model of p certain people can add policies, and then these other arbitrary four judges can vote on them, which I don't know how to define. But
+
+Speaker 4: Mhmm. Well, I
+
+Speaker 1: think in this case, they they get to bypass the the jury. That was my understanding.
+
+Speaker 2: Oh, that was bypassing the jury. I thought there was only propose being able to propose. So that's an ambiguous there. What does he mean by adding policies? Does that mean you're adding a proposal to be voted on, or you're actually changing the policy?
+
+Speaker 1: Right. Yeah.
+
+Speaker 2: Oh, I mean, changing the
+
+Speaker 1: policy outright just seems like
+
+Speaker 2: the dictator model. So I I don't know.
+
+Speaker 1: Yeah. Also, hi, Michael. Welcome to the call. This is a kind of, like, informal open house kind of, like, session where we're going through a user flow for some software that we're developing, like a like a user interface that we're working on for a project called PolicyKit. So we're just chatting about that, and we're almost at the end of it. But okay. So how easy was the purpose and the steps? To me, I thought I thought that was pretty straightforward. There's some confusion about, like like, what you just mentioned, Steve, but, like, in terms of, like, the actual purpose and the steps of the flow, maybe, like, a six.
+
+Speaker 2: Sure. Five or six.
+
+Speaker 1: Five or six? Victor, you wanna help us? What do you think? Five or six?
+
+Speaker 3: Yeah. It is pretty easy. It looks like the first two steps for the just how to to choose one choose the policy. The step three is to make post a message, this is just changes or a a side roles.
+
+Speaker 4: Yeah. Yeah. Yeah.
+
+Speaker 1: Yeah. Alright. Let's go let's go with six. You know, let let's let's be charitable towards the end here. Okay. So how would you explain what a role is to someone who has not used PolicyKit before?
+
+Speaker 2: It's a set of permissions given to a set of users.
+
+Speaker 4: K. Yeah. Mhmm. Victor?
+
+Speaker 3: Yeah. I think that's the best technical description.
+
+Speaker 4: Mhmm.
+
+Speaker 1: Michael, I don't know if you were here for the beginning of this task, but if you're if you wanna jump in, you're welcome to participate here. Yeah. Thank you. I'm so sorry I'm late. I have no idea at at the moment. I'll follow-up
+
+Speaker 4: with you. Okay.
+
+Speaker 1: You gotta hear that. It's all good.
+
+Speaker 4: We're gonna be in this spot
+
+Speaker 2: for I didn't do anything.
+
+Speaker 4: I didn't do anything.
+
+Speaker 1: Yeah. Okay. So that seems pretty straightforward. And then do you have any thoughts or feedback on the roles feature? So what that you had the Obviously,
+
+Speaker 2: you need roles. It's the it's the proper approach.
+
+Speaker 1: There was the unclear if the role supersedes the the the constitutional policy.
+
+Speaker 2: Well, I mean, I'm assuming the constitutional policy defines roles. And if it's not contradictory with itself, then, you know
+
+Speaker 4: Mhmm.
+
+Speaker 1: Alright. Any other thoughts, Victor?
+
+Speaker 3: Yeah. I agree. Is roles necessary? Just the whole point of having a policy kit is to define who does what. So this is basically to define what the roles are and what's the scope of the role.
+
+Speaker 4: Okay.
+
+Speaker 1: Let's see if there's anything else here. Okay. Few more questions. Based on all the flows you've just clicked through, how would you explain what PolicyKit is to someone who has not heard of it before?
+
+Speaker 2: But I like your point that you just made, which is to see governance primarily as an assemblage of roles. And looking at those roles is a easier way to get a kind of intuitive snapshot of the governance rather than anything else. So once roles are just kind of familiarized, that will allow a more intuitive modular design approach.
+
+Speaker 1: Yeah. I mean, I think this is very similar to, like, a capabilities based approach.
+
+Speaker 4: Yeah.
+
+Speaker 2: It is. Yeah.
+
+Speaker 4: Yeah.
+
+Speaker 1: And it's actually I mean, it's a little
+
+Speaker 2: capabilities based approach to do security because
+
+Speaker 1: Yeah. Yeah. Yeah. Yeah.
+
+Speaker 2: That's super fucked again by AI.
+
+Speaker 1: Yeah. I mean, exactly. What's the problem? But it it also makes a lot more sense than, like, a kind of access control that's sort of like an echo approach. Oh, wow. It just falls into the same kind of implicit feudalism and centralizing. Anyway, I think this I think this does fit a little more in the echo paradigm than the capabilities paradigm, but I do think a capabilities paradigm approach would be really interesting here. Okay. Any other thoughts on this on this on this particular question on how you would explain PolicyKit to someone who's not heard of it before, have to go?
+
+Speaker 3: Make make it easy to choose a policy and also make it use to to to actually implement it in Slack.
+
+Speaker 4: K.
+
+Speaker 1: Any other comments here? Should we move on?
+
+Speaker 2: I'm good. Plus, I'm about out of time.
+
+Speaker 4: Cool.
+
+Speaker 1: Alright. Anything else you'd like to add?
+
+Speaker 4: No?
+
+Speaker 1: No? I think we left a lot of comments as we went.
+
+Speaker 4: Yeah, yeah, yeah. I agree.
+
+Speaker 1: Okay. We're gonna skip this question. And then how, if at all, would you expect PolicyKit to help you with community governance?
+
+Speaker 3: Instead of reading about policies all over the world, just to come here and use the policy that give you all the all the knowledge we need about choosing a right policy.
+
+Speaker 1: Wait. Say more about that. Are you imagining PolicyKit as, like, a library?
+
+Speaker 3: Yeah. So, basically, policy is one thing that I see that we need to talk about and no have no idea what's the best way sometimes. Right? So this is if all the information I know this is just starting point. But if it if this policy kit have all the choices you have in the world about possible policy models, and then you don't have to read out about the policies and just use this toolkit to make it right a choice quickly.
+
+Speaker 2: And, yeah, and, obviously, the whole module approach should be templated so that you can, you know, just be like, oh, I'm just we're gonna just adopt the policies of this other group and then adapt them further to ourselves.
+
+Speaker 4: Right. Mhmm. Yeah. Exactly.
+
+Speaker 2: That's a better way of writing it.
+
+Speaker 4: Mhmm. Okay.
+
+Speaker 1: Alright. We're gonna submit that. And okay. We did it.
+
+Speaker 3: Just one last question. Is this such only about open source policy or is it about, in general, any any current policy?
+
+Speaker 1: This is for this is not open source specific. So for instance, we've done some user testing with people who are working in mutual aid contexts and maybe organize on Slack or use Open Collective. So it's it's meant to be broadly people who are wanting to do governance with online communities.
+
+Speaker 3: Okay.
+
+Speaker 4: Cool. Alright. Well, I
+
+Speaker 2: hope you found that useful. I gotta roll.
+
+Speaker 1: Yes. Thank you. This was fun. Thanks for coming by.
+
+Speaker 3: Thanks.
+
+Speaker 2: Alright. See you next week.
+
+Speaker 1: Cool. Okay. Bye.
+
+Speaker 4: Stop recording. Cool.

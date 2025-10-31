@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Civic Soundscapes{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <a class="brand-logo" href="{{ url_for('index') }}">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Civic Soundscapes logo">
+                <div class="brand-title">
+                    <span class="brand-title--primary">Civic Soundscapes</span>
+                    <span class="brand-title--subtitle">Voices shaping democratic futures</span>
+                </div>
+            </a>
+        </div>
+        <nav>
+            <a href="{{ url_for('index') }}">Overview</a>
+            <a href="{{ url_for('topic_graph') }}">Graph</a>
+            <a href="{{ url_for('podcast_list') }}">All Podcasts</a>
+            <a href="{{ url_for('transcript_list') }}">All Transcripts</a>
+            <a href="{{ url_for('manage_feeds') }}">Manage Feeds</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        © {{ current_year }} Civic Soundscapes. Crafted with care.
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

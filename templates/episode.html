@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}{{ episode.title }}{% endblock %}
+
+{% block content %}
+<article class="episode-detail">
+    <h2>{{ episode.title }}</h2>
+    <p class="meta">
+        <span>{{ episode.podcast.name }}</span> |
+        <span>{{ episode.published_at.date() if episode.published_at else "Unknown date" }}</span> |
+        <span>{{ episode.duration|format_duration }}</span>
+    </p>
+    {% if episode.description %}
+        <p class="description">{{ episode.description|render_description }}</p>
+    {% endif %}
+    <section>
+        <h3>Top Keywords</h3>
+        {% if keywords %}
+            <ul class="keywords">
+                {% for keyword in keywords %}
+                    <li>{{ keyword.keyword }} <span>{{ "%.3f"|format(keyword.weight) }}</span></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No salient keywords identified yet for this episode.</p>
+        {% endif %}
+    </section>
+    {% if transcript %}
+    <section class="transcript-section">
+        <div class="transcript-header">
+            <h3>Transcript</h3>
+            <div class="transcript-actions">
+                <button type="button" class="cta tertiary" data-toggle="transcript" data-target="transcript-thread">Expand full transcript</button>
+                <a class="cta secondary" href="{{ url_for('export_transcript', episode_id=episode.id) }}">Export JSON</a>
+            </div>
+        </div>
+        <div class="transcript-wrapper">
+            {% if chat_segments %}
+            <div id="transcript-thread" class="chat-thread collapsed">
+                {% for segment in chat_segments %}
+                    {% set speaker_index = segment.speaker_index or 0 %}
+                    {% set color_class = "speaker-" ~ (speaker_index % 4) %}
+                    {% set alignment_class = "align-right" if (speaker_index % 2) else "align-left" %}
+                    {% set speaker_label = segment.speaker_display or segment.speaker_label or ("Speaker " ~ (speaker_index + 1)) %}
+                    <div class="chat-message {{ color_class }} {{ alignment_class }}">
+                        <div class="chat-meta">
+                            <span class="chat-speaker">{{ speaker_label }}</span>
+                            <span class="chat-timestamp">
+                                {{ segment.start|format_timestamp }} – {{ segment.end|format_timestamp }}
+                            </span>
+                        </div>
+                        <div class="chat-bubble">{{ segment.text }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <pre id="transcript-thread" class="transcript collapsed">{{ transcript.transcript_text }}</pre>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+</article>
+{% if episode.audio_url %}
+<section class="panel audio-panel">
+    <div class="panel-header">
+        <div>
+            <h3>Listen</h3>
+            <p>Play the episode directly from the source feed.</p>
+        </div>
+    </div>
+    <div class="audio-body">
+        {% if episode.image_url %}
+        <img class="episode-art" src="{{ episode.image_url }}" alt="Cover art for {{ episode.title }}">
+        {% endif %}
+        <audio class="episode-player" controls preload="none">
+            <source src="{{ episode.audio_url }}">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-toggle="transcript"]').forEach((button) => {
+    const targetId = button.dataset.target;
+    const targetEl = document.getElementById(targetId);
+    if (!targetEl) {
+      return;
+    }
+    const collapsedLabel = 'Expand full transcript';
+    const expandedLabel = 'Collapse transcript';
+    button.textContent = collapsedLabel;
+    button.addEventListener('click', () => {
+      const isExpanded = targetEl.classList.toggle('expanded');
+      if (isExpanded) {
+        targetEl.classList.remove('collapsed');
+        button.textContent = expandedLabel;
+      } else {
+        targetEl.classList.add('collapsed');
+        button.textContent = collapsedLabel;
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

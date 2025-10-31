@@ -1,0 +1,6 @@
+feedparser==6.0.11
+requests==2.31.0
+deepgram-sdk==3.0.0
+SQLAlchemy==2.0.23
+python-dotenv==1.0.0
+Flask==3.0.0

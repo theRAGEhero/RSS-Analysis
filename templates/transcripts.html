@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}All Transcripts{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Transcript Library</h2>
+            <p>Speaker-diarized transcripts for every processed episode. Click an episode to read the full text.</p>
+        </div>
+        <a class="cta" href="{{ url_for('podcast_list') }}">Back to podcasts →</a>
+    </div>
+    <div class="table-wrapper">
+    <table class="episodes-table">
+        <thead>
+            <tr>
+                <th>Podcast</th>
+                <th>Episode</th>
+                <th>Published</th>
+                <th>Confidence</th>
+                <th>Duration</th>
+                <th>Keywords</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for episode in episodes %}
+            <tr>
+                <td>{{ episode.podcast.name }}</td>
+                <td><a href="{{ url_for('episode_detail', podcast_slug=episode.podcast.name|slugify, episode_id=episode.id) }}">{{ episode.title }}</a></td>
+                <td>{{ episode.published_at.date() if episode.published_at else "Unknown" }}</td>
+                {% set conf = episode.transcript.confidence if episode.transcript else None %}
+                <td>{{ "%.2f"|format(conf) if conf is not none else "N/A" }}</td>
+                <td>{{ episode.duration|format_duration }}</td>
+                <td>
+                    {% set top = episode.keywords[:5] %}
+                    {% if top %}
+                        {{ top | map(attribute='keyword') | join(', ') }}
+                    {% else %}
+                        n/a
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="6">No transcripts available yet. Run the ingestion pipeline to populate the database.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a class="cta tertiary" href="{{ url_for('transcript_list', page=page-1) }}">Previous</a>
+        {% endif %}
+        <span>Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+            <a class="cta tertiary" href="{{ url_for('transcript_list', page=page+1) }}">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

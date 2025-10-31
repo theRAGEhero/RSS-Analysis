@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<section class="summary">
+    <div class="stat-card">
+        <h3>{{ stats.podcast_count }}</h3>
+        <p>Podcasts tracked</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ stats.episode_count }}</h3>
+        <p>Episodes ingested</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ stats.transcript_count }}</h3>
+        <p>Episodes transcribed</p>
+    </div>
+    <div class="stat-card keywords">
+        <h3>Top Themes</h3>
+        <ul>
+            {% for keyword, weight in stats.top_keywords %}
+                <li>{{ keyword }} <span>{{ "%.2f"|format(weight) }}</span></li>
+            {% endfor %}
+            {% if not stats.top_keywords %}
+                <li>No keywords yet.</li>
+            {% endif %}
+        </ul>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Latest Transcribed Episodes</h2>
+            <p>Recent releases across every tracked show with speaker-aware transcripts.</p>
+        </div>
+        <a class="cta" href="{{ url_for('transcript_list') }}">Browse all transcripts →</a>
+    </div>
+    <div class="table-wrapper">
+    <table class="episodes-table">
+        <thead>
+            <tr>
+                <th>Podcast</th>
+                <th>Episode</th>
+                <th>Transcribed</th>
+                <th>Confidence</th>
+                <th>Keywords</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for episode in recent_episodes %}
+            <tr>
+                <td>{{ episode.podcast.name }}</td>
+                <td><a href="{{ url_for('episode_detail', podcast_slug=episode.podcast.name|slugify, episode_id=episode.id) }}">{{ episode.title }}</a></td>
+                <td class="table-date">
+                    {% if episode.transcribed_at %}
+                        <span class="table-date-primary">{{ episode.transcribed_at.strftime("%b %d, %Y") }}</span>
+                    {% else %}
+                        <span class="table-date-primary">Unknown</span>
+                    {% endif %}
+                    {% if episode.published_at %}
+                        <span class="table-date-secondary">Published {{ episode.published_at.strftime("%b %d, %Y") }}</span>
+                    {% endif %}
+                </td>
+                {% set conf = episode.transcript.confidence if episode.transcript else None %}
+                <td>{{ "%.2f"|format(conf) if conf is not none else "N/A" }}</td>
+                    <td>{{ episode.keywords[:5] | map(attribute='keyword') | join(', ') }}</td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="5">No transcripts available yet.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Episode Connection Graph</h2>
+            <p>Episodes are connected when they share standout keywords across podcasts. Drag nodes to explore clusters.</p>
+        </div>
+        <div class="panel-actions">
+            <button type="button" class="cta secondary" id="refresh-graph">Refresh graph stats</button>
+            <a class="cta tertiary" href="{{ url_for('episode_graph') }}">Download JSON</a>
+            <span class="graph-recompute-status" id="refresh-graph-status" aria-live="polite"></span>
+        </div>
+    </div>
+    <div id="graph-container">
+        <svg id="topic-graph"></svg>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Podcast Catalog</h2>
+            <p>Explore the democracy innovation podcasts currently monitored.</p>
+        </div>
+        <a class="cta" href="{{ url_for('podcast_list') }}">View all podcasts →</a>
+    </div>
+    <div class="podcast-grid">
+        {% for podcast in podcasts[:3] %}
+            <article class="podcast-card">
+                <h3>{{ podcast.name }}</h3>
+                <p>{{ podcast.description or "No description available yet." }}</p>
+                <ul class="podcast-meta">
+                    <li><strong>Episodes:</strong> {{ podcast.episodes|length }}</li>
+                    <li><strong>Category:</strong> {{ podcast.category or "Unknown" }}</li>
+                    <li><strong>Language:</strong> {{ podcast.language or "Unknown" }}</li>
+                </ul>
+                <div class="podcast-actions">
+                    <a href="{{ url_for('podcast_list') }}#podcast-{{ podcast.id }}" class="cta secondary">See details</a>
+                    {% if podcast.website %}
+                        <a href="{{ podcast.website }}" target="_blank" rel="noopener" class="cta tertiary">Website</a>
+                    {% endif %}
+                </div>
+            </article>
+        {% endfor %}
+        {% if podcasts|length == 0 %}
+            <p>No podcasts loaded. Add rows to data/podcasts.csv and rerun the pipeline.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js" integrity="sha512-pD7n0ANKPO/tUMGAfJOyrUo9qeycGQ21MCH2RKDWE/YXdz/BPZt6r9Ga6IpiObOqYkbK7gm+Yw2rZsf1CcfCOw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+const refreshButton = document.getElementById('refresh-graph');
+const refreshStatus = document.getElementById('refresh-graph-status');
+const recomputeUrl = "{{ url_for('graph_recompute') }}";
+
+if (refreshButton) {
+  refreshButton.addEventListener('click', async () => {
+    if (refreshStatus) {
+      refreshStatus.textContent = 'Refreshing graph…';
+      refreshStatus.className = 'graph-recompute-status';
+    }
+    refreshButton.disabled = true;
+    try {
+      const response = await fetch(recomputeUrl, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Failed to refresh graph.');
+      }
+      if (refreshStatus) {
+        refreshStatus.textContent = 'Graph refreshed.';
+        refreshStatus.className = 'graph-recompute-status success';
+      }
+      window.location.reload();
+    } catch (error) {
+      if (refreshStatus) {
+        refreshStatus.textContent = error.message || 'Unable to refresh graph.';
+        refreshStatus.className = 'graph-recompute-status error';
+      }
+      refreshButton.disabled = false;
+    }
+  });
+}
+
+const graphData = {{ graph|tojson }};
+const svg = d3.select('#topic-graph');
+const container = document.getElementById('graph-container');
+function resizeSvg() {
+  const width = container.clientWidth;
+  const height = 520;
+  svg.attr('width', width).attr('height', height);
+  return { width, height };
+}
+
+let { width, height } = resizeSvg();
+
+const color = d3.scaleOrdinal(d3.schemeSet2);
+
+const simulation = d3.forceSimulation(graphData.nodes)
+  .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(d => Math.max(120, 250 - (d.score * 90))).strength(0.45))
+  .force('charge', d3.forceManyBody().strength(-240))
+  .force('center', d3.forceCenter(width / 2, height / 2))
+  .force('collision', d3.forceCollide().radius(80));
+
+const link = svg.append('g')
+  .attr('stroke', '#cbd5f5')
+  .attr('stroke-width', 1.5)
+  .selectAll('line')
+  .data(graphData.links)
+  .enter()
+  .append('line')
+  .attr('stroke-width', d => 1 + d.score * 4)
+  .attr('stroke', '#94a3b8')
+  .attr('opacity', 0.85);
+
+const nodeGroup = svg.append('g')
+  .selectAll('g')
+  .data(graphData.nodes)
+  .enter()
+  .append('g')
+  .call(d3.drag()
+    .on('start', event => {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+    })
+    .on('drag', event => {
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
+    })
+    .on('end', event => {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    })
+  );
+
+nodeGroup.append('circle')
+  .attr('r', 18)
+  .attr('fill', d => color(d.podcast))
+  .attr('stroke', '#0f172a')
+  .attr('stroke-width', 1.5);
+
+nodeGroup.append('text')
+  .attr('x', 22)
+  .attr('y', 5)
+  .attr('font-size', '12px')
+  .attr('fill', '#0f172a')
+  .text(d => `${d.podcast} — ${d.title}`)
+  .each(function() {
+    const text = d3.select(this);
+    if (this.getComputedTextLength() > container.clientWidth * 0.35) {
+      text.attr('font-size', '11px');
+    }
+  });
+
+nodeGroup.append('title')
+  .text(d => `${d.podcast}\n${d.title}`);
+
+link.append('title')
+  .text(d => `Shared keywords: ${d.keywords.join(', ')}`);
+
+simulation.on('tick', () => {
+  link
+    .attr('x1', d => d.source.x)
+    .attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x)
+    .attr('y2', d => d.target.y);
+
+  nodeGroup.attr('transform', d => `translate(${d.x}, ${d.y})`);
+});
+
+window.addEventListener('resize', () => {
+  ({ width, height } = resizeSvg());
+  simulation.force('center', d3.forceCenter(width / 2, height / 2));
+  simulation.alpha(0.3).restart();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}All Podcasts{% endblock %}
+
+{% block content %}
+<section class="panel">
+    {% if podcasts %}
+    <div class="table-wrapper">
+        <table class="podcast-table">
+            <thead>
+                <tr>
+                    <th>Podcast</th>
+                    <th>Episodes</th>
+                    <th>Transcribed</th>
+                    <th>Last Release</th>
+                    <th>Links</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for block in podcasts %}
+                {% set latest = block.episodes[0] if block.episodes else None %}
+                <tr id="podcast-{{ block.podcast.id }}">
+                    <td class="podcast-table-info">
+                        <div class="podcast-table-title">
+                            <a href="{{ url_for('podcast_detail', podcast_slug=block.podcast.name|slugify) }}">{{ block.podcast.name }}</a>
+                            <span class="badge">{{ block.podcast.category or "No category" }}</span>
+                            <span class="badge badge-muted">{{ block.podcast.language or "—" }}</span>
+                        </div>
+                        <p class="podcast-table-description">{{ (block.podcast.description | striptags | trim or "No description available yet.") | truncate(140, True) }}</p>
+                    </td>
+                    <td>{{ block.episodes|length }}</td>
+                    <td>{{ block.transcribed_count }}</td>
+                    <td>{{ latest.published_at.date() if latest and latest.published_at else "—" }}</td>
+                    <td class="podcast-table-links">
+                        <a href="{{ url_for('podcast_detail', podcast_slug=block.podcast.name|slugify) }}" class="table-link">Profile</a>
+                        {% if block.podcast.website %}
+                            <a href="{{ block.podcast.website }}" target="_blank" rel="noopener" class="table-link">Website</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p>No podcasts found. Add entries and rerun the ingestion pipeline.</p>
+    {% endif %}
+</section>
+{% endblock %}

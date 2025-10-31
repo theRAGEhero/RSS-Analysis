@@ -1,0 +1,24 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+
+# Environment files
+.env
+.env.local
+
+# SQLite databases and backups
+data/*.sqlite
+data/*.sqlite.*
+*.bak
+
+# Logs and runtime artifacts
+logs/
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db

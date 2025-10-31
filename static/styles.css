@@ -96,6 +96,34 @@ footer {
     border-top: 1px solid rgba(79, 70, 229, 0.15);
 }
 
+footer .footer-credit {
+    display: block;
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    color: inherit;
+}
+
+footer .footer-credit a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+footer .footer-credit a:hover {
+    text-decoration: underline;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
 section.podcast {
     background: #fff;
     border-radius: 12px;

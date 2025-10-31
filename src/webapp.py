@@ -44,6 +44,7 @@ from rss_transcriber import (
     Podcast,
     Transcript,
     RssTranscriptionPipeline,
+    PipelineCancelled,
     build_episode_graph,
     DEFAULT_MODEL,
     DEFAULT_DB_PATH,
@@ -76,7 +77,10 @@ class PipelineJobState:
     log_path: Optional[Path] = None
     log_level: str = "INFO"
     messages: List[str] = field(default_factory=list)
+    cancel_requested: bool = False
+    cancelled_at: Optional[dt.datetime] = None
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _cancel_event: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
 
     def mark_started(self) -> None:
         with self._lock:
@@ -97,6 +101,14 @@ class PipelineJobState:
             self.error = message
             self.finished_at = dt.datetime.utcnow()
             self._append_message(f"Pipeline failed: {message}")
+
+    def mark_cancelled(self, message: str = "Pipeline run cancelled.") -> None:
+        with self._lock:
+            self.status = "cancelled"
+            self.stage = "cancelled"
+            self.finished_at = dt.datetime.utcnow()
+            self.cancelled_at = self.finished_at
+            self._append_message(message)
 
     def _append_message(self, message: str) -> None:
         if not message:
@@ -142,6 +154,12 @@ class PipelineJobState:
                     self.status = "failed"
                     if self.finished_at is None:
                         self.finished_at = dt.datetime.utcnow()
+                elif self.stage == "cancelled":
+                    self.status = "cancelled"
+                    if self.finished_at is None:
+                        self.finished_at = dt.datetime.utcnow()
+                elif self.stage == "cancelling":
+                    self.status = "cancelling"
                 elif self.stage == "start":
                     self.status = "running"
 
@@ -176,6 +194,7 @@ class PipelineJobState:
                 "run_label": self.run_label,
                 "log_level": self.log_level,
                 "messages": list(self.messages),
+                "cancel_requested": self.cancel_requested,
             }
             if self.log_path:
                 try:
@@ -190,6 +209,21 @@ class PipelineJobState:
         with self._lock:
             return self.log_path
 
+    def get_cancel_event(self) -> threading.Event:
+        return self._cancel_event
+
+    def request_cancel(self) -> bool:
+        with self._lock:
+            if self.status in {"completed", "failed", "cancelled"}:
+                return False
+            if self.cancel_requested:
+                return False
+            self.cancel_requested = True
+            self.stage = "cancelling"
+            self._append_message("Cancellation requested. Stopping safely…")
+        self._cancel_event.set()
+        return True
+
 
 @dataclass
 class PipelineJobConfig:
@@ -200,6 +234,8 @@ class PipelineJobConfig:
     model: str
     log_level: str
     max_episodes: int = 0
+    feed_ids: Optional[List[int]] = None
+    force_reprocess: bool = False
 
 
 def slugify(value: str) -> str:
@@ -327,6 +363,29 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         if not deepgram_api_key:
             raise ValueError("Deepgram API key is required to run the pipeline.")
 
+        feed_ids: List[int] = []
+        single_feed_id = payload.get("feed_id")
+        if single_feed_id is not None:
+            try:
+                feed_ids.append(int(single_feed_id))
+            except (TypeError, ValueError):
+                raise ValueError("Invalid feed_id provided; expected an integer.")
+
+        payload_feed_ids = payload.get("feed_ids")
+        if isinstance(payload_feed_ids, list):
+            for value in payload_feed_ids:
+                try:
+                    feed_ids.append(int(value))
+                except (TypeError, ValueError):
+                    raise ValueError("feed_ids must contain integers only.")
+        elif payload_feed_ids is not None and not isinstance(payload_feed_ids, list):
+            raise ValueError("feed_ids must be provided as a list of integers.")
+
+        unique_feed_ids = sorted({feed_id for feed_id in feed_ids if feed_id is not None})
+        force_reprocess = bool(payload.get("force_reprocess"))
+        if force_reprocess and not unique_feed_ids:
+            raise ValueError("force_reprocess requires at least one feed_id.")
+
         return PipelineJobConfig(
             db_path=db_path_value,
             output_dir=output_dir_value,
@@ -335,6 +394,8 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
             model=model,
             log_level=log_level,
             max_episodes=max_episodes,
+            feed_ids=unique_feed_ids or None,
+            force_reprocess=force_reprocess,
         )
 
     def _pipeline_job_thread(job: PipelineJobState, config: PipelineJobConfig) -> None:
@@ -355,15 +416,27 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                 job.log_path = runs_dir / f"{configured_run_label}.log"
 
             database_url = f"sqlite:///{config.db_path}"
-            feeds = load_feeds_from_db(database_url)
+            feeds = load_feeds_from_db(database_url, config.feed_ids)
+            if config.feed_ids:
+                found_ids = {feed.id for feed in feeds if feed.id is not None}
+                missing = [str(feed_id) for feed_id in config.feed_ids if feed_id not in found_ids]
+                if missing:
+                    raise RuntimeError(f"Feed(s) not found: {', '.join(missing)}")
             if not feeds:
                 raise RuntimeError("No feeds configured. Add feeds in the Manage Feeds page before running the pipeline.")
+
+            feed_names_preview = ", ".join(feed.name for feed in feeds[:5])
+            message = f"Loaded {len(feeds)} feed(s); starting pipeline."
+            if config.feed_ids:
+                message += f" Target feeds: {feed_names_preview}."
+            if config.force_reprocess:
+                message += " Reprocessing transcripts."
 
             job.apply_event(
                 {
                     "stage": "start",
                     "feeds_total": len(feeds),
-                    "message": f"Loaded {len(feeds)} feed(s); starting pipeline.",
+                    "message": message,
                 }
             )
 
@@ -374,10 +447,20 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                 output_dir=config.output_dir,
                 model=config.model,
                 progress_callback=job.apply_event,
+                stop_event=job.get_cancel_event(),
+                force_reprocess=config.force_reprocess,
             )
             pipeline.run(max_episodes=config.max_episodes)
-            job.mark_completed()
-            job.apply_event({"message": "Pipeline run completed successfully."})
+            if job.cancel_requested and job.get_cancel_event().is_set():
+                job.mark_cancelled("Pipeline run cancelled.")
+                job.apply_event({"stage": "cancelled", "message": "Pipeline run cancelled."})
+            else:
+                job.mark_completed()
+                job.apply_event({"message": "Pipeline run completed successfully."})
+        except PipelineCancelled as exc:
+            message = str(exc) or "Pipeline run cancelled."
+            job.mark_cancelled(message)
+            job.apply_event({"stage": "cancelled", "message": message})
         except Exception as exc:  # pragma: no cover - defensive
             logging.getLogger(__name__).exception("Pipeline job %s failed", job.id)
             job.mark_failed(str(exc))
@@ -469,6 +552,24 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         snapshot = job.as_dict()
         snapshot["log_tail"] = tail_file(job.get_log_path())
         return jsonify(snapshot)
+
+    @app.route("/feeds/import/pipeline/stop", methods=["POST"])
+    @require_feed_auth
+    def stop_pipeline_run():
+        payload = request.get_json(silent=True) or {}
+        job_id = payload.get("job_id")
+        if not job_id:
+            with job_lock:
+                job_id = active_pipeline_job_id
+        if not job_id:
+            return jsonify({"error": "No active pipeline run."}), 404
+        job = get_pipeline_job(job_id)
+        if not job:
+            return jsonify({"error": "Job not found."}), 404
+        if not job.request_cancel():
+            return jsonify({"error": "Unable to cancel run.", "status": job.status}), 409
+        job.apply_event({"stage": "cancelling", "message": "Cancellation requested."})
+        return jsonify({"job_id": job.id, "status": "cancelling"}), 202
 
     @app.route("/feeds/import/pipeline/jobs", methods=["GET"])
     @require_feed_auth

@@ -140,10 +140,12 @@
                  data-start-url="{{ url_for('start_pipeline_run') }}"
                  data-status-url="{{ url_for('pipeline_status') }}"
                  data-jobs-url="{{ url_for('list_pipeline_jobs') }}"
+                 data-stop-url="{{ url_for('stop_pipeline_run') }}"
                  data-active-job-id="{{ active_pipeline_job_id or '' }}"
                  data-default-model="{{ pipeline_defaults.model }}"
                  data-default-max-episodes="{{ pipeline_defaults.max_episodes }}">
                 <button type="button" class="cta secondary" id="start-pipeline-run">Start pipeline run</button>
+                <button type="button" class="cta danger" id="stop-pipeline-run" hidden>Stop pipeline</button>
                 <div class="import-progress" id="pipeline-progress-container" hidden>
                     <div class="progress-label">
                         <span id="pipeline-status-text">Ready when you are.</span>
@@ -200,6 +202,7 @@
                     <td>{{ feed.created_at.strftime("%Y-%m-%d %H:%M") if feed.created_at else "—" }}</td>
                     <td class="feed-row-actions">
                         <button class="cta tertiary" type="submit" name="form_type" value="update">Save</button>
+                        <button class="cta tertiary feed-reprocess-button" type="button" data-feed-id="{{ feed.id }}" data-feed-name="{{ feed.name }}">Reprocess</button>
                         <button class="cta danger" type="submit" name="form_type" value="delete" formnovalidate onclick="return confirm('Remove this feed? This will stop future ingests for it.');">Delete</button>
                     </td>
                 </form>
@@ -226,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewButton = document.getElementById('preview-feed');
   const modeButtons = Array.from(document.querySelectorAll('.ingest-toggle'));
   const panels = Array.from(document.querySelectorAll('.ingest-panel'));
+  const reprocessButtons = Array.from(document.querySelectorAll('.feed-reprocess-button'));
 
   const showStatus = (message, type = 'info') => {
     if (!statusEl) return;
@@ -319,6 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const pipelineApp = document.getElementById('pipeline-import-app');
   if (pipelineApp) {
     const startButton = document.getElementById('start-pipeline-run');
+    const stopButton = document.getElementById('stop-pipeline-run');
     const progressContainer = document.getElementById('pipeline-progress-container');
     const progressFill = document.getElementById('pipeline-progress-fill');
     const progressPercent = document.getElementById('pipeline-progress-percent');
@@ -337,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startUrl = pipelineApp.dataset.startUrl || '';
     const statusUrl = pipelineApp.dataset.statusUrl || '';
     const jobsUrl = pipelineApp.dataset.jobsUrl || '';
+    const stopUrl = pipelineApp.dataset.stopUrl || '';
     let activeJobId = pipelineApp.dataset.activeJobId || null;
     let pollTimer = null;
 
@@ -352,13 +358,21 @@ document.addEventListener('DOMContentLoaded', () => {
       episode_skipped: 'Episode already transcribed.',
       episode_failed: 'Episode failed.',
       completed: 'Pipeline run complete.',
+      cancelling: 'Stopping pipeline…',
+      cancelled: 'Pipeline run cancelled.',
       failed: 'Pipeline run failed.',
     };
 
-    const setButtonState = (loading) => {
-      if (!startButton) return;
-      startButton.disabled = loading;
-      startButton.textContent = loading ? 'Pipeline running…' : 'Start pipeline run';
+    const setRunningState = (running, { stopping = false } = {}) => {
+      if (startButton) {
+        startButton.disabled = running;
+        startButton.textContent = running ? 'Pipeline running…' : 'Start pipeline run';
+      }
+      if (stopButton) {
+        stopButton.hidden = !running;
+        stopButton.disabled = stopping;
+        stopButton.textContent = stopping ? 'Stopping…' : 'Stop pipeline';
+      }
     };
 
     const applyMessages = (messages) => {
@@ -477,7 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(`${statusUrl}?job_id=${encodeURIComponent(activeJobId)}`, { headers: { 'Accept': 'application/json' } });
         if (response.status === 404) {
           stopPolling();
-          setButtonState(false);
+          activeJobId = null;
+          setRunningState(false);
           return;
         }
         if (!response.ok) {
@@ -485,9 +500,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const payload = await response.json();
         renderStatus(payload);
-        if (payload.status === 'completed' || payload.status === 'failed') {
+        if (payload.status === 'completed' || payload.status === 'failed' || payload.status === 'cancelled') {
           stopPolling();
-          setButtonState(false);
+          activeJobId = null;
+          setRunningState(false);
+        } else if (payload.status === 'cancelling' || payload.cancel_requested) {
+          setRunningState(true, { stopping: true });
+        } else {
+          setRunningState(true);
         }
       } catch (error) {
         console.error(error);
@@ -514,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = await response.json();
         if (payload.active_job_id) {
           activeJobId = payload.active_job_id;
-          setButtonState(true);
+          setRunningState(true);
           startPolling();
         } else if (Array.isArray(payload.jobs) && payload.jobs.length) {
           const latest = payload.jobs[0];
@@ -525,7 +545,13 @@ document.addEventListener('DOMContentLoaded', () => {
           if (Object.prototype.hasOwnProperty.call(latest, 'log_tail')) {
             applyLogTail(latest.log_tail);
           }
-          setButtonState(false);
+          if (latest.status === 'cancelling' || latest.cancel_requested) {
+            setRunningState(true, { stopping: true });
+          } else if (latest.status === 'running') {
+            setRunningState(true);
+          } else {
+            setRunningState(false);
+          }
           if (latest.id && statusUrl) {
             try {
               const statusResponse = await fetch(`${statusUrl}?job_id=${encodeURIComponent(latest.id)}`, { headers: { 'Accept': 'application/json' } });
@@ -540,6 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           applyMessages([]);
           applyLogTail([]);
+          setRunningState(false);
         }
       } catch (error) {
         console.error(error);
@@ -551,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startButton && startUrl) {
       startButton.addEventListener('click', async () => {
         if (startButton.disabled) return;
-        setButtonState(true);
+        setRunningState(true);
         try {
           const response = await fetch(startUrl, {
             method: 'POST',
@@ -570,12 +597,97 @@ document.addEventListener('DOMContentLoaded', () => {
           startPolling();
         } catch (error) {
           console.error(error);
-          setButtonState(false);
+          setRunningState(false);
           progressContainer.hidden = false;
           applyMessages([error.message]);
           applyLogTail([]);
           renderStatus({ percent: 0, stage: 'failed', status: 'failed', error: error.message, feeds_total: 0, feeds_processed: 0 });
         }
+      });
+    }
+
+    if (stopButton && stopUrl) {
+      stopButton.addEventListener('click', async () => {
+        if (!activeJobId || stopButton.disabled) return;
+        setRunningState(true, { stopping: true });
+        try {
+          const response = await fetch(stopUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ job_id: activeJobId }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || `Stop failed (HTTP ${response.status}).`);
+          }
+          applyMessages(['Cancellation requested. Waiting for running tasks to finish…']);
+          renderStatus({ stage: 'cancelling', status: 'cancelling', cancel_requested: true });
+          startPolling();
+        } catch (error) {
+          console.error(error);
+          setRunningState(true);
+          applyMessages([error.message]);
+        }
+      });
+    }
+
+    const launchReprocess = async (feedId, feedName) => {
+      if (!startUrl) {
+        console.warn('Start URL not configured; cannot reprocess.');
+        return;
+      }
+      if (activeJobId) {
+        applyMessages(['Another pipeline run is already active. Stop it before reprocessing.']);
+        return;
+      }
+      setRunningState(true);
+      if (progressContainer) {
+        progressContainer.hidden = false;
+      }
+      try {
+        const response = await fetch(startUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ feed_id: feedId, force_reprocess: true }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || `Start failed (HTTP ${response.status}).`);
+        }
+        activeJobId = payload.job_id;
+        progressContainer.hidden = false;
+        const feedLabel = feedName || 'selected feed';
+        applyMessages([`Reprocessing ${feedLabel}…`]);
+        applyLogTail([]);
+        renderStatus({ percent: 0, stage: 'queued', feeds_total: 1, feeds_processed: 0, current_feed: feedLabel, cancel_requested: false });
+        startPolling();
+      } catch (error) {
+        console.error(error);
+        setRunningState(false);
+        if (progressContainer) {
+          progressContainer.hidden = false;
+        }
+        applyMessages([error.message]);
+      }
+    };
+
+    if (reprocessButtons.length) {
+      reprocessButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const feedId = parseInt(button.dataset.feedId || '', 10);
+          if (!Number.isFinite(feedId)) {
+            applyMessages(['Unable to determine feed identifier for reprocessing.']);
+            return;
+          }
+          const feedName = button.dataset.feedName || '';
+          const confirmMessage = feedName
+            ? `Reprocess all episodes for "${feedName}"? Existing transcripts will be replaced.`
+            : 'Reprocess all episodes for this feed? Existing transcripts will be replaced.';
+          if (!window.confirm(confirmMessage)) {
+            return;
+          }
+          launchReprocess(feedId, feedName);
+        });
       });
     }
 

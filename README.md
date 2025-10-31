@@ -45,6 +45,9 @@ python src/rss_transcriber.py
 - Environment variables are loaded from `.env` (or a custom path via `--env-file`). Keep API keys out of version control when sharing the project.
 - The generated HTML report now includes an interactive force-directed graph that visualises cross-podcast episode connections based on shared TF–IDF keywords.
 - Every pipeline execution drops a timestamped file under `logs/runs/` and points `logs/latest.log` at the newest run. The same log layout is reused by the database import/export utility described below.
+- Feed language metadata (e.g. `de-DE`) is normalised to Deepgram’s accepted codes automatically, so keeping the language column up to date improves transcription accuracy.
+- The web admin now exposes a cancel button for active ingest jobs; cancelling waits for the current episode download/transcription to finish before the pipeline shuts down cleanly.
+- Need to re-run a single source after changing its metadata? Use the new **Reprocess** action next to the feed row—this launches the pipeline for that feed only, clears existing transcripts, and rebuilds them with the latest language settings.
 
 Keyword analytics are re-generated after each ingest using TF–IDF with an expanded stopword set tuned for conversational audio. Episode detail pages now ship with an expandable transcript viewer, a diarization table, and the Flask UI exposes the graph plus a JSON feed at `/api/graph` for downstream analysis.
 

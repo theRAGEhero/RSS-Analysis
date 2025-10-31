@@ -8,6 +8,7 @@ import mimetypes
 import os
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -50,6 +51,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    delete,
     select,
     func,
     inspect,
@@ -77,8 +79,41 @@ DEFAULT_LOG_LEVEL = os.environ.get("PIPELINE_LOG_LEVEL", "INFO")
 DEFAULT_MAX_EPISODES = 0
 DEFAULT_MODEL = "nova-2"
 
-
 Base = declarative_base(metadata=MetaData())
+
+
+class PipelineCancelled(Exception):
+    """Raised when an ingest run is cancelled."""
+
+DEEPGRAM_LANGUAGE_ALIASES: Dict[str, str] = {
+    "en": "en",
+    "en-us": "en-US",
+    "en-gb": "en-GB",
+    "es": "es",
+    "es-es": "es",
+    "es-mx": "es",
+    "fr": "fr",
+    "fr-fr": "fr",
+    "de": "de",
+    "de-de": "de",
+    "it": "it",
+    "it-it": "it",
+    "pt": "pt",
+    "pt-pt": "pt-PT",
+    "pt-br": "pt-BR",
+    "nl": "nl",
+    "nl-nl": "nl",
+    "pl": "pl",
+    "pl-pl": "pl",
+    "sv": "sv",
+    "sv-se": "sv",
+    "nb": "nb",
+    "nb-no": "nb",
+    "da": "da",
+    "da-dk": "da",
+    "fi": "fi",
+    "fi-fi": "fi",
+}
 
 
 def parse_iso_datetime(value: Optional[str]) -> Optional[dt.datetime]:
@@ -274,6 +309,7 @@ class PodcastFeed:
     rss_url: str
     category: Optional[str] = None
     language: Optional[str] = None
+    id: Optional[int] = None
 
 
 BASE_STOPWORDS = {
@@ -570,6 +606,27 @@ KEYWORD_STOPWORDS = {
 }
 
 
+def normalise_language_code(*candidates: Optional[str]) -> Optional[str]:
+    """Normalise RSS language hints to Deepgram-compatible identifiers."""
+    for candidate in candidates:
+        if not candidate:
+            continue
+        normalised = str(candidate).strip()
+        if not normalised:
+            continue
+        normalised = normalised.replace("_", "-")
+        lower_key = normalised.lower()
+        if lower_key in DEEPGRAM_LANGUAGE_ALIASES:
+            return DEEPGRAM_LANGUAGE_ALIASES[lower_key]
+        if "-" in lower_key:
+            base = lower_key.split("-", 1)[0]
+            if base in DEEPGRAM_LANGUAGE_ALIASES:
+                return DEEPGRAM_LANGUAGE_ALIASES[base]
+            return base
+        return lower_key
+    return None
+
+
 def setup_logging(log_dir: Path, level: str, run_label: Optional[str] = None) -> str:
     global RUN_ID
 
@@ -638,6 +695,8 @@ class RssTranscriptionPipeline:
         output_dir: Path,
         model: str = "nova-2",
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        stop_event: Optional[threading.Event] = None,
+        force_reprocess: bool = False,
     ) -> None:
         self.feeds = feeds
         self.database_url = database_url
@@ -646,6 +705,8 @@ class RssTranscriptionPipeline:
         self.model = model
         self.keywords_dirty = True
         self.progress_callback = progress_callback
+        self._stop_event = stop_event
+        self.force_reprocess = force_reprocess
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -665,6 +726,14 @@ class RssTranscriptionPipeline:
             self.progress_callback(payload)
         except Exception:  # pragma: no cover - defensive callback handling
             logger.debug("Progress callback failed", exc_info=True)
+
+    def _should_stop(self) -> bool:
+        return bool(self._stop_event and self._stop_event.is_set())
+
+    def _check_cancel(self) -> None:
+        if self._should_stop():
+            logger.info("Cancellation requested. Halting pipeline…")
+            raise PipelineCancelled("Pipeline run cancelled by user request.")
 
     def run(self, max_episodes: int = 0) -> None:
         feed_total = len(self.feeds)
@@ -686,12 +755,15 @@ class RssTranscriptionPipeline:
             message=f"Pipeline initialised for {feed_total} feed(s).",
         )
 
+        self._check_cancel()
+
         with self.SessionLocal() as session:
             transcript_count = session.execute(select(func.count(Transcript.id))).scalar() or 0
             keyword_count = session.execute(select(func.count(EpisodeKeyword.id))).scalar() or 0
             if transcript_count and keyword_count == 0:
                 self.keywords_dirty = True
             for feed in self.feeds:
+                self._check_cancel()
                 self._emit_progress(
                     stage="fetch_feed",
                     feeds_total=feed_total,
@@ -741,6 +813,7 @@ class RssTranscriptionPipeline:
                     entries = entries[:max_episodes]
 
                 for entry in entries:
+                    self._check_cancel()
                     episode_title = entry.get("title") or "Untitled episode"
                     self._emit_progress(
                         stage="episode_start",
@@ -755,7 +828,7 @@ class RssTranscriptionPipeline:
                         message=f"Processing episode {episode_title}",
                     )
                     try:
-                        outcome = self._process_episode(session, podcast, entry)
+                        outcome = self._process_episode(session, podcast, entry, feed.language)
                     except Exception as exc:
                         logger.exception("Failed to process episode %s: %s", entry.get("title"), exc)
                         session.rollback()
@@ -810,6 +883,8 @@ class RssTranscriptionPipeline:
                     message=f"Completed feed {feed.rss_url} ({total_entries} episode(s) visited).",
                 )
 
+        self._check_cancel()
+
         if self.keywords_dirty:
             try:
                 logger.info("Refreshing keyword analysis using TF-IDF")
@@ -817,6 +892,8 @@ class RssTranscriptionPipeline:
                 self.keywords_dirty = False
             except Exception as exc:
                 logger.exception("Failed to recompute keywords: %s", exc)
+
+        self._check_cancel()
 
         self.generate_report()
         self._write_topic_network_cache()
@@ -899,7 +976,8 @@ class RssTranscriptionPipeline:
         session.commit()
         return podcast
 
-    def _process_episode(self, session, podcast: Podcast, entry) -> str:
+    def _process_episode(self, session, podcast: Podcast, entry, feed_language: Optional[str]) -> str:
+        self._check_cancel()
         guid = entry.get("guid") or entry.get("id") or entry.get("link")
         if not guid:
             raise ValueError("Episode entry missing GUID/ID")
@@ -925,6 +1003,12 @@ class RssTranscriptionPipeline:
             itunes_image = entry.get("itunes_image")
             image_url = itunes_image.get("href") if isinstance(itunes_image, dict) else itunes_image
 
+        language_hint = normalise_language_code(
+            entry.get("language") if hasattr(entry, "get") else None,
+            feed_language,
+            podcast.language,
+        )
+
         if episode is None:
             episode = Episode(
                 podcast_id=podcast.id,
@@ -948,27 +1032,43 @@ class RssTranscriptionPipeline:
             episode.duration = duration or episode.duration
 
         if episode.transcribed_at:
-            logger.info("Episode %s already transcribed; skipping", episode.title)
-            session.commit()
-            return "skipped"
+            if self.force_reprocess:
+                logger.info("Reprocessing episode %s; clearing existing transcript.", episode.title)
+                if episode.transcript:
+                    session.delete(episode.transcript)
+                    episode.transcript = None
+                session.execute(delete(EpisodeKeyword).where(EpisodeKeyword.episode_id == episode.id))
+                episode.transcribed_at = None
+                episode.deepgram_request_id = None
+                self.keywords_dirty = True
+                session.flush()
+            else:
+                logger.info("Episode %s already transcribed; skipping", episode.title)
+                session.commit()
+                return "skipped"
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=self._guess_extension(audio_url)) as tmp_file:
+            self._check_cancel()
             logger.info("Downloading %s", audio_url)
             response = requests.get(audio_url, stream=True, timeout=60)
             response.raise_for_status()
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     tmp_file.write(chunk)
+                if self._should_stop():
+                    raise PipelineCancelled("Cancellation requested during download.")
             tmp_path = Path(tmp_file.name)
 
         try:
-            transcript_data = self._transcribe(tmp_path)
+            self._check_cancel()
+            transcript_data = self._transcribe(tmp_path, language_hint)
         finally:
             try:
                 tmp_path.unlink(missing_ok=True)
             except OSError:
                 logger.warning("Failed to remove temporary file %s", tmp_path)
 
+        self._check_cancel()
         metadata_kwargs = {
             "transaction_key": transcript_data.get("transaction_key"),
             "request_id": transcript_data.get("request_id"),
@@ -1043,7 +1143,7 @@ class RssTranscriptionPipeline:
             return extension
         return ".mp3"
 
-    def _transcribe(self, file_path: Path) -> Dict[str, object]:
+    def _transcribe(self, file_path: Path, language_hint: Optional[str]) -> Dict[str, object]:
         mimetype, _ = mimetypes.guess_type(file_path.name)
         source = {"buffer": open(file_path, "rb"), "mimetype": mimetype or "audio/mpeg"}
         option_kwargs = {
@@ -1054,6 +1154,8 @@ class RssTranscriptionPipeline:
             "paragraphs": True,
             "utterances": True,
         }
+        if language_hint:
+            option_kwargs["language"] = language_hint
 
         options = PrerecordedOptions(**option_kwargs) if PrerecordedOptions else option_kwargs
 
@@ -1618,22 +1720,20 @@ def load_feeds_from_csv(csv_path: Path) -> List[PodcastFeed]:
     return feeds
 
 
-def load_feeds_from_db(database_url: str) -> List[PodcastFeed]:
+def load_feeds_from_db(database_url: str, feed_ids: Optional[Sequence[int]] = None) -> List[PodcastFeed]:
     engine = create_engine(database_url)
     Base.metadata.create_all(engine)
     ensure_transcript_metadata_columns(engine)
     SessionLocal = sessionmaker(bind=engine)
     try:
         with SessionLocal() as session:
-            rows = (
-                session.execute(
-                    select(FeedSubscription).order_by(FeedSubscription.name.asc())
-                )
-                .scalars()
-                .all()
-            )
+            query = select(FeedSubscription).order_by(FeedSubscription.name.asc())
+            if feed_ids:
+                query = query.where(FeedSubscription.id.in_(feed_ids))
+            rows = session.execute(query).scalars().all()
             feeds = [
                 PodcastFeed(
+                    id=row.id,
                     name=row.name,
                     rss_url=row.rss_url,
                     category=row.category,

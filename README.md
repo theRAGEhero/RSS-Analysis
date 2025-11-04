@@ -48,6 +48,7 @@ python src/rss_transcriber.py
 - Feed language metadata (e.g. `de-DE`) is normalised to Deepgram’s accepted codes automatically, so keeping the language column up to date improves transcription accuracy.
 - The web admin now exposes a cancel button for active ingest jobs; cancelling waits for the current episode download/transcription to finish before the pipeline shuts down cleanly.
 - Need to re-run a single source after changing its metadata? Use the new **Reprocess** action next to the feed row—this launches the pipeline for that feed only, clears existing transcripts, and rebuilds them with the latest language settings.
+- Anyone spotting gaps can now submit RSS suggestions from the overview page; admins review them under “Proposed Podcasts” before promoting to the tracked list.
 
 Keyword analytics are re-generated after each ingest using TF–IDF with an expanded stopword set tuned for conversational audio. Episode detail pages now ship with an expandable transcript viewer, a diarization table, and the Flask UI exposes the graph plus a JSON feed at `/api/graph` for downstream analysis.
 

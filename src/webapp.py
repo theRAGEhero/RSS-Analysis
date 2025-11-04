@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover - optional dependency
     np = None  # type: ignore
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 from typing import Optional, Any, Dict, List, Tuple, Set
 
 SRC_DIR = Path(__file__).resolve().parent
@@ -45,6 +45,7 @@ from rss_transcriber import (
     Transcript,
     RssTranscriptionPipeline,
     PipelineCancelled,
+    ProposedFeed,
     build_episode_graph,
     DEFAULT_MODEL,
     DEFAULT_DB_PATH,
@@ -340,6 +341,12 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         if not candidate.is_absolute():
             candidate = (BASE_DIR / candidate).resolve()
         return candidate
+
+    def redirect_with_message(endpoint: str, **params: Any) -> Response:
+        location = url_for(endpoint)
+        if params:
+            location = f"{location}?{urlencode({k: v for k, v in params.items() if v is not None})}"
+        return redirect(location, 303)
 
     def get_pipeline_job(job_id: str) -> Optional[PipelineJobState]:
         with job_lock:
@@ -1135,6 +1142,9 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                 for item in summary.get("top_keywords", [])[:12]
             ]
 
+            propose_status = request.args.get("propose_status")
+            propose_message = request.args.get("propose_message")
+
             return render_template(
                 "index.html",
                 podcasts=podcasts,
@@ -1146,7 +1156,68 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                     "top_keywords": summary_top_keywords,
                 },
                 graph=graph,
+                propose_status=propose_status,
+                propose_message=propose_message,
             )
+
+    @app.route("/feeds/propose", methods=["POST"])
+    def propose_feed_route():
+        rss_url = (request.form.get("rss_url") or "").strip()
+        name = (request.form.get("name") or "").strip()
+        category = (request.form.get("category") or "").strip() or None
+        language = (request.form.get("language") or "").strip() or None
+
+        if not rss_url:
+            return redirect_with_message(
+                "index",
+                propose_status="error",
+                propose_message="RSS URL is required to propose a podcast.",
+            )
+
+        with get_session() as session:
+            existing_feed = (
+                session.execute(
+                    select(FeedSubscription).where(func.lower(FeedSubscription.rss_url) == func.lower(rss_url))
+                )
+                .scalars()
+                .first()
+            )
+            if existing_feed:
+                return redirect_with_message(
+                    "index",
+                    propose_status="error",
+                    propose_message="That RSS feed is already tracked.",
+                )
+
+            existing_proposed = (
+                session.execute(
+                    select(ProposedFeed).where(func.lower(ProposedFeed.rss_url) == func.lower(rss_url))
+                )
+                .scalars()
+                .first()
+            )
+            if existing_proposed:
+                return redirect_with_message(
+                    "index",
+                    propose_status="info",
+                    propose_message="That feed has already been proposed.",
+                )
+
+            if not name:
+                parsed = urlparse(rss_url)
+                host = (parsed.hostname or "podcast").replace("www.", "")
+                base = host.split(".", 1)[0].replace("-", " ").title()
+                name = f"{base} Podcast"
+
+            proposed = ProposedFeed(name=name, rss_url=rss_url, category=category, language=language)
+            session.add(proposed)
+            session.commit()
+
+        return redirect_with_message(
+            "index",
+            propose_status="success",
+            propose_message="Thanks! Your podcast suggestion has been queued for review.",
+        )
 
     @app.route("/graph")
     def topic_graph():
@@ -1601,9 +1672,79 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                             else:
                                 success = f"Removed feed '{feed_name}'."
 
+                elif form_type == "proposed_confirm":
+                    proposed_id_raw = request.form.get("proposed_id")
+                    if not proposed_id_raw:
+                        errors.append("Missing proposed feed identifier.")
+                    else:
+                        try:
+                            proposed_id = int(proposed_id_raw)
+                        except ValueError:
+                            errors.append("Invalid proposed feed identifier.")
+                        else:
+                            proposed = session.get(ProposedFeed, proposed_id)
+                            if not proposed:
+                                errors.append("Proposed feed not found or already processed.")
+                            else:
+                                duplicate = (
+                                    session.execute(
+                                        select(FeedSubscription).where(
+                                            func.lower(FeedSubscription.rss_url) == func.lower(proposed.rss_url)
+                                        )
+                                    )
+                                    .scalars()
+                                    .first()
+                                )
+                                if duplicate:
+                                    errors.append("A tracked feed already uses that RSS URL.")
+                                else:
+                                    name = proposed.name or ""
+                                    if not name:
+                                        parsed = urlparse(proposed.rss_url)
+                                        host = (parsed.hostname or "rss.feed").replace("www.", "")
+                                        base = host.split(".", 1)[0].replace("-", " ").title()
+                                        name = f"{base} Podcast"
+
+                                    feed = FeedSubscription(
+                                        name=name,
+                                        rss_url=proposed.rss_url,
+                                        category=proposed.category,
+                                        language=proposed.language,
+                                    )
+                                    session.add(feed)
+                                    session.delete(proposed)
+                                    session.commit()
+                                    success = f"Promoted '{name}' to tracked feeds."
+
+                elif form_type == "proposed_delete":
+                    proposed_id_raw = request.form.get("proposed_id")
+                    if not proposed_id_raw:
+                        errors.append("Missing proposed feed identifier.")
+                    else:
+                        try:
+                            proposed_id = int(proposed_id_raw)
+                        except ValueError:
+                            errors.append("Invalid proposed feed identifier.")
+                        else:
+                            proposed = session.get(ProposedFeed, proposed_id)
+                            if not proposed:
+                                errors.append("Proposed feed not found or already removed.")
+                            else:
+                                session.delete(proposed)
+                                session.commit()
+                                success = "Discarded proposed feed."
+
             feeds = (
                 session.execute(
                     select(FeedSubscription).order_by(FeedSubscription.created_at.desc())
+                )
+                .scalars()
+                .all()
+            )
+
+            proposed_feeds = (
+                session.execute(
+                    select(ProposedFeed).order_by(ProposedFeed.created_at.desc())
                 )
                 .scalars()
                 .all()
@@ -1615,6 +1756,7 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         return render_template(
             "feeds.html",
             feeds=feeds,
+            proposed_feeds=proposed_feeds,
             errors=errors,
             success=success,
             import_stats=import_stats,

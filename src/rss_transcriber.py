@@ -303,6 +303,18 @@ class EpisodeKeyword(Base):
     __table_args__ = (UniqueConstraint("episode_id", "keyword", name="uq_episode_keyword"),)
 
 
+class ProposedFeed(Base):
+    __tablename__ = "proposed_feeds"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=True)
+    rss_url = Column(String(500), nullable=False, unique=True)
+    category = Column(String(128), nullable=True)
+    language = Column(String(16), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
 @dataclass(frozen=True)
 class PodcastFeed:
     name: str

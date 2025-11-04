@@ -3,30 +3,88 @@
 {% block title %}Overview{% endblock %}
 
 {% block content %}
-<section class="summary">
-    <div class="stat-card">
-        <h3>{{ stats.podcast_count }}</h3>
-        <p>Podcasts tracked</p>
+<section class="summary-grid">
+    <article class="summary-card summary-metrics">
+        <h3 class="summary-card__title">Pipeline snapshot</h3>
+        <div class="metric-strip">
+            <div class="metric-item">
+                <span class="metric-icon" aria-hidden="true">🎧</span>
+                <div class="metric-body">
+                    <span class="metric-label">Podcasts tracked</span>
+                    <span class="metric-value">{{ stats.podcast_count }}</span>
+                </div>
+            </div>
+            <div class="metric-item">
+                <span class="metric-icon" aria-hidden="true">🗂️</span>
+                <div class="metric-body">
+                    <span class="metric-label">Episodes ingested</span>
+                    <span class="metric-value">{{ stats.episode_count }}</span>
+                </div>
+            </div>
+            <div class="metric-item">
+                <span class="metric-icon" aria-hidden="true">📝</span>
+                <div class="metric-body">
+                    <span class="metric-label">Episodes transcribed</span>
+                    <span class="metric-value">{{ stats.transcript_count }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="summary-keywords-inline">
+            <header class="summary-card__header">
+                <h4>Top Themes</h4>
+                <span class="summary-card__hint">Weighted keywords from the latest transcripts</span>
+            </header>
+            <ul class="keyword-list keyword-list--inline">
+                {% for keyword, weight in stats.top_keywords %}
+                    <li>
+                        <span class="keyword-term">{{ keyword }}</span>
+                        <span class="keyword-weight">{{ "%.2f"|format(weight) }}</span>
+                    </li>
+                {% endfor %}
+                {% if not stats.top_keywords %}
+                    <li><span class="keyword-term">No keywords yet.</span></li>
+                {% endif %}
+            </ul>
+        </div>
+    </article>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Suggest a Podcast</h2>
+            <p>Spot a democracy show we’re missing? Share the RSS link and the team can approve it later.</p>
+        </div>
     </div>
-    <div class="stat-card">
-        <h3>{{ stats.episode_count }}</h3>
-        <p>Episodes ingested</p>
+    {% if propose_message %}
+    <div class="alert {{ propose_status or 'info' }}">
+        <p>{{ propose_message }}</p>
     </div>
-    <div class="stat-card">
-        <h3>{{ stats.transcript_count }}</h3>
-        <p>Episodes transcribed</p>
-    </div>
-    <div class="stat-card keywords">
-        <h3>Top Themes</h3>
-        <ul>
-            {% for keyword, weight in stats.top_keywords %}
-                <li>{{ keyword }} <span>{{ "%.2f"|format(weight) }}</span></li>
-            {% endfor %}
-            {% if not stats.top_keywords %}
-                <li>No keywords yet.</li>
-            {% endif %}
-        </ul>
-    </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('propose_feed_route') }}" class="propose-feed-form">
+        <div class="form-grid">
+            <label>
+                <span>Podcast name <small>(optional)</small></span>
+                <input type="text" name="name" placeholder="Democracy Works">
+            </label>
+            <label>
+                <span>RSS feed URL <strong>*</strong></span>
+                <input type="url" name="rss_url" placeholder="https://example.com/feed.xml" required>
+            </label>
+            <label>
+                <span>Category <small>(optional)</small></span>
+                <input type="text" name="category" placeholder="Civic Tech">
+            </label>
+            <label>
+                <span>Language <small>(optional)</small></span>
+                <input type="text" name="language" placeholder="en">
+            </label>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="cta">Submit suggestion</button>
+            <p class="form-hint">Suggestions aren’t ingested automatically; admins confirm them from the Manage Feeds page.</p>
+        </div>
+    </form>
 </section>
 
 <section class="panel">

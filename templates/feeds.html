@@ -175,6 +175,54 @@
 <section class="panel">
     <div class="panel-header">
         <div>
+            <h2>Proposed Podcasts</h2>
+            <p>Suggestions awaiting review. Confirm to promote them to tracked feeds or discard if they’re not a fit.</p>
+        </div>
+    </div>
+    {% if proposed_feeds %}
+    <table class="episodes-table">
+        <thead>
+            <tr>
+                <th>Podcast</th>
+                <th>RSS URL</th>
+                <th>Category</th>
+                <th>Language</th>
+                <th>Added</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for proposal in proposed_feeds %}
+            <tr>
+                <td>{{ proposal.name or 'Untitled proposal' }}</td>
+                <td><a href="{{ proposal.rss_url }}" target="_blank" rel="noopener">{{ proposal.rss_url }}</a></td>
+                <td>{{ proposal.category or '—' }}</td>
+                <td>{{ proposal.language or '—' }}</td>
+                <td>{{ proposal.created_at.strftime("%Y-%m-%d %H:%M") if proposal.created_at else "—" }}</td>
+                <td class="feed-row-actions">
+                    <form method="post">
+                        <input type="hidden" name="form_type" value="proposed_confirm">
+                        <input type="hidden" name="proposed_id" value="{{ proposal.id }}">
+                        <button class="cta tertiary" type="submit">Confirm &amp; track</button>
+                    </form>
+                    <form method="post" onsubmit="return confirm('Remove this proposed podcast?');">
+                        <input type="hidden" name="form_type" value="proposed_delete">
+                        <input type="hidden" name="proposed_id" value="{{ proposal.id }}">
+                        <button class="cta danger" type="submit">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No proposed podcasts yet. New suggestions submitted from the overview page will appear here.</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
             <h2>Tracked Feeds</h2>
             <p>Feeds stored in the database. Remove duplicates before importing to avoid skipped rows.</p>
         </div>

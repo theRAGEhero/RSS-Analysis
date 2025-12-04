@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block title %}API Keys{% endblock %}
+
+{% block content %}
+<section class="panel feed-hero">
+    <div>
+        <h1>API Key Management</h1>
+        <p>Generate and manage API keys to access your transcript data programmatically. Each key can be revoked or deleted at any time.</p>
+        <div class="alert info" style="margin: 1rem 0; padding: 1rem; background-color: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+            <strong>Note:</strong> API access requires manual approval. Keys generated here are for approved users only. External parties should contact the administrator to request access.
+        </div>
+        <div class="feed-hero-actions">
+            <a class="cta" href="#" onclick="showGenerateModal(); return false;">Generate New API Key</a>
+            <a class="cta tertiary" href="{{ url_for('manage_feeds') }}">Back to Feeds</a>
+        </div>
+    </div>
+    <div class="feed-hero-stats">
+        <div class="hero-stat">
+            <span class="hero-stat-value">{{ keys|length }}</span>
+            <span class="hero-stat-label">API Keys</span>
+        </div>
+        <div class="hero-hint">
+            <span>Tip: Store your API keys securely. They won't be shown again after generation.</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Active API Keys</h2>
+            <p class="panel-subtitle">Manage your API keys for programmatic access to transcript data.</p>
+        </div>
+    </div>
+
+    {% if keys %}
+    <div class="feed-list">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key in keys %}
+                <tr data-key-id="{{ key.id }}">
+                    <td><strong>{{ key.name }}</strong></td>
+                    <td>
+                        <code class="api-key-display">{{ key.key[:12] }}...{{ key.key[-8:] }}</code>
+                    </td>
+                    <td>
+                        {% if key.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Revoked</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ key.created_at.strftime('%Y-%m-%d %H:%M') if key.created_at else 'N/A' }}</td>
+                    <td>{{ key.last_used_at.strftime('%Y-%m-%d %H:%M') if key.last_used_at else 'Never' }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            {% if key.is_active %}
+                            <button class="btn-action btn-warning" onclick="revokeKey({{ key.id }}, '{{ key.name }}')">Revoke</button>
+                            {% else %}
+                            <button class="btn-action btn-success" onclick="activateKey({{ key.id }}, '{{ key.name }}')">Activate</button>
+                            {% endif %}
+                            <button class="btn-action btn-danger" onclick="deleteKey({{ key.id }}, '{{ key.name }}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No API keys yet. Generate your first key to get started with the API.</p>
+    </div>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>API Documentation</h2>
+            <p class="panel-subtitle">Quick reference for using the REST API</p>
+        </div>
+    </div>
+
+    <div class="api-docs">
+        <h3>Authentication</h3>
+        <p>Include your API key in the request header:</p>
+        <pre><code>X-API-Key: your-api-key-here</code></pre>
+
+        <h3>Available Endpoints</h3>
+        <ul class="endpoint-list">
+            <li><code>GET /api/v1/podcasts</code> - List all podcasts</li>
+            <li><code>GET /api/v1/podcasts/{id}</code> - Get specific podcast</li>
+            <li><code>GET /api/v1/podcasts/{id}/episodes</code> - List episodes for podcast</li>
+            <li><code>GET /api/v1/episodes</code> - List all episodes</li>
+            <li><code>GET /api/v1/episodes/{id}</code> - Get episode with transcript</li>
+            <li><code>GET /api/v1/transcripts</code> - List all transcripts</li>
+            <li><code>GET /api/v1/transcripts/{id}</code> - Get specific transcript</li>
+            <li><code>GET /api/v1/search?q=query</code> - Search transcripts</li>
+        </ul>
+
+        <h3>Query Parameters</h3>
+        <ul class="param-list">
+            <li><code>limit</code> - Results per page (default: 50, max: 200)</li>
+            <li><code>offset</code> - Pagination offset (default: 0)</li>
+            <li><code>podcast_id</code> - Filter by podcast ID</li>
+            <li><code>category</code> - Filter by category</li>
+            <li><code>date_from</code> - Filter by date (ISO format)</li>
+            <li><code>date_to</code> - Filter by date (ISO format)</li>
+            <li><code>include_diarization</code> - Include speaker segments (default: true)</li>
+        </ul>
+
+        <h3>Example Request</h3>
+        <pre><code>curl -H "X-API-Key: your-key" \
+  "http://localhost:8000/api/v1/episodes?limit=10&transcribed_only=true"</code></pre>
+    </div>
+</section>
+
+<!-- Modal for generating new key -->
+<div id="generate-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Generate New API Key</h3>
+            <button class="modal-close" onclick="closeGenerateModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label>
+                <span>Key Name / Description</span>
+                <input type="text" id="new-key-name" placeholder="e.g., Mobile App, Analytics Service" required>
+                <small class="hint">Give this key a descriptive name to remember its purpose</small>
+            </label>
+            <div id="generate-error" class="alert error" style="display: none;"></div>
+            <div id="generate-success" class="alert success" style="display: none;">
+                <p><strong>API Key Generated!</strong></p>
+                <p>Copy this key now - it won't be shown again:</p>
+                <div class="key-display">
+                    <code id="generated-key"></code>
+                    <button onclick="copyToClipboard()">Copy</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="cta" id="generate-btn" onclick="generateKey()">Generate Key</button>
+            <button class="cta tertiary" onclick="closeGenerateModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.data-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.api-key-display {
+    font-family: monospace;
+    background-color: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-inactive {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-action {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-action:hover {
+    opacity: 0.8;
+}
+
+.btn-warning {
+    background-color: #fbbf24;
+    color: #78350f;
+}
+
+.btn-success {
+    background-color: #34d399;
+    color: #065f46;
+}
+
+.btn-danger {
+    background-color: #f87171;
+    color: #7f1d1d;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6b7280;
+}
+
+.api-docs {
+    padding: 1rem;
+}
+
+.api-docs h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #1f2937;
+}
+
+.api-docs pre {
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.api-docs code {
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.endpoint-list,
+.param-list {
+    list-style: none;
+    padding: 0;
+}
+
+.endpoint-list li,
+.param-list li {
+    padding: 0.5rem;
+    border-left: 3px solid #3b82f6;
+    margin-bottom: 0.5rem;
+    background-color: #eff6ff;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    padding: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.key-display {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.key-display code {
+    flex: 1;
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    word-break: break-all;
+}
+
+.key-display button {
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showGenerateModal() {
+    document.getElementById('generate-modal').style.display = 'flex';
+    document.getElementById('new-key-name').value = '';
+    document.getElementById('generate-error').style.display = 'none';
+    document.getElementById('generate-success').style.display = 'none';
+    document.getElementById('generate-btn').style.display = 'block';
+}
+
+function closeGenerateModal() {
+    document.getElementById('generate-modal').style.display = 'none';
+}
+
+async function generateKey() {
+    const name = document.getElementById('new-key-name').value.trim();
+    const errorEl = document.getElementById('generate-error');
+    const successEl = document.getElementById('generate-success');
+    const generateBtn = document.getElementById('generate-btn');
+
+    if (!name) {
+        errorEl.textContent = 'Please enter a key name';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    errorEl.style.display = 'none';
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+
+    try {
+        const formData = new FormData();
+        formData.append('name', name);
+
+        const response = await fetch('/admin/api-keys/generate', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            document.getElementById('generated-key').textContent = data.key;
+            successEl.style.display = 'block';
+            generateBtn.style.display = 'none';
+
+            // Reload page after 5 seconds
+            setTimeout(() => {
+                location.reload();
+            }, 5000);
+        } else {
+            errorEl.textContent = data.error || 'Failed to generate key';
+            errorEl.style.display = 'block';
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate Key';
+        }
+    } catch (error) {
+        errorEl.textContent = 'Network error: ' + error.message;
+        errorEl.style.display = 'block';
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate Key';
+    }
+}
+
+function copyToClipboard() {
+    const keyText = document.getElementById('generated-key').textContent;
+    navigator.clipboard.writeText(keyText).then(() => {
+        alert('API key copied to clipboard!');
+    });
+}
+
+async function revokeKey(keyId, keyName) {
+    if (!confirm(`Revoke API key "${keyName}"? It will stop working immediately.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/revoke`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to revoke key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function activateKey(keyId, keyName) {
+    if (!confirm(`Activate API key "${keyName}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/activate`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to activate key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function deleteKey(keyId, keyName) {
+    if (!confirm(`PERMANENTLY DELETE API key "${keyName}"? This cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/delete`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+// Close modal when clicking outside
+document.getElementById('generate-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeGenerateModal();
+    }
+});
+</script>
+{% endblock %}

@@ -101,6 +101,36 @@ Open `http://localhost:8000` to browse podcasts, inspect transcripts, and review
 - `/podcasts` – Full catalog of tracked podcasts with episode counts and recent releases.
 - `/transcripts` – Complete transcript library with confidence scores and keyword highlights.
 - `/episodes/<id>` – Episode detail page with transcript text and diarization payload.
+- `/admin/api-keys` – API key management (requires HTTP Basic Auth)
+
+## REST API Access
+
+The platform provides a comprehensive REST API for programmatic access to transcripts, episodes, and podcasts. **API access requires manual approval.**
+
+### Key Features
+
+- **Authentication**: API key-based (X-API-Key header)
+- **Endpoints**: Podcasts, episodes, transcripts, full-text search
+- **Speaker Diarization**: Included in transcript responses
+- **Pagination**: All list endpoints support limit/offset
+- **Filtering**: By podcast, category, date range, and more
+
+### Quick Start
+
+1. **Request an API Key**: Contact the administrator with your use case
+2. **Authenticate**: Include the key in request headers: `X-API-Key: your-key`
+3. **Make Requests**: Access endpoints at `/api/v1/*`
+
+### Example Request
+
+```bash
+curl -H "X-API-Key: your-key" \
+  "http://localhost:8000/api/v1/search?q=democracy&limit=10"
+```
+
+### Full Documentation
+
+See [API_DOCS.md](./API_DOCS.md) for complete endpoint documentation, examples, and best practices.
 
 ## Extending the System
 

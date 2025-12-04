@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<section class="panel feed-hero">
+    <div>
+        <h1>Settings</h1>
+        <p>Manage feeds, API keys, and site configuration in one unified admin panel.</p>
+    </div>
+</section>
+
+<div class="admin-tabs-container">
+    <nav class="admin-tabs">
+        <button class="admin-tab active" data-tab="feeds" onclick="switchTab('feeds')">
+            Feed Management
+        </button>
+        <button class="admin-tab" data-tab="api-keys" onclick="switchTab('api-keys')">
+            API Keys
+        </button>
+        <button class="admin-tab" data-tab="site-settings" onclick="switchTab('site-settings')">
+            Site Settings
+        </button>
+    </nav>
+
+    <div class="admin-tab-content">
+        <!-- Feed Management Tab -->
+        <div id="tab-feeds" class="tab-panel active">
+            {% include 'admin_feeds_content.html' %}
+        </div>
+
+        <!-- API Keys Tab -->
+        <div id="tab-api-keys" class="tab-panel">
+            {% include 'admin_api_keys_content.html' %}
+        </div>
+
+        <!-- Site Settings Tab -->
+        <div id="tab-site-settings" class="tab-panel">
+            {% include 'admin_site_settings_content.html' %}
+        </div>
+    </div>
+</div>
+
+<style>
+.admin-tabs-container {
+    margin-top: 2rem;
+}
+
+.admin-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 2rem;
+}
+
+.admin-tab {
+    padding: 1rem 2rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6b7280;
+    transition: all 0.2s;
+    position: relative;
+    bottom: -2px;
+}
+
+.admin-tab:hover {
+    color: #111827;
+    background-color: #f9fafb;
+}
+
+.admin-tab.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+
+<script>
+function switchTab(tabName) {
+    // Update URL hash without page reload
+    history.pushState(null, null, '#' + tabName);
+
+    // Hide all tab panels
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+
+    // Remove active class from all tabs
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    // Show selected tab panel
+    document.getElementById('tab-' + tabName).classList.add('active');
+
+    // Add active class to selected tab button
+    document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+}
+
+// Handle initial page load with hash
+window.addEventListener('DOMContentLoaded', function() {
+    const hash = window.location.hash.substring(1);
+    if (hash && ['feeds', 'api-keys', 'site-settings'].includes(hash)) {
+        switchTab(hash);
+    }
+});
+
+// Handle browser back/forward
+window.addEventListener('hashchange', function() {
+    const hash = window.location.hash.substring(1);
+    if (hash && ['feeds', 'api-keys', 'site-settings'].includes(hash)) {
+        switchTab(hash);
+    }
+});
+</script>
+{% endblock %}

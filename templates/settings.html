@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Site Settings{% endblock %}
+
+{% block content %}
+<section class="panel feed-hero">
+    <div>
+        <h1>Site Settings</h1>
+        <p>Configure site-wide settings including analytics tracking and other customizations.</p>
+        <div class="feed-hero-actions">
+            <a class="cta tertiary" href="{{ url_for('manage_feeds') }}">Back to Feeds</a>
+        </div>
+    </div>
+</section>
+
+{% if success %}
+<div class="alert success">
+    <p>{{ success }}</p>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert error">
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Analytics Tracking</h2>
+            <p class="panel-subtitle">Add Google Analytics, Matomo, Plausible, or any analytics tracking code.</p>
+        </div>
+    </div>
+
+    <div style="padding: 1.5rem;">
+        <form method="post" action="{{ url_for('admin_settings') }}">
+            <div class="form-group">
+                <label for="analytics_snippet">
+                    <strong>Analytics Snippet</strong>
+                    <small style="display: block; color: #6b7280; margin-top: 0.25rem;">
+                        Paste your complete analytics tracking code here (including &lt;script&gt; tags).
+                        This will be injected into the &lt;head&gt; section of every page.
+                    </small>
+                </label>
+                <textarea
+                    id="analytics_snippet"
+                    name="analytics_snippet"
+                    rows="12"
+                    style="width: 100%; font-family: monospace; font-size: 0.875rem; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; background-color: #f9fafb;"
+                    placeholder="<!-- Example: Google Analytics -->
+<script async src=&quot;https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX&quot;></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>"
+                >{{ current_snippet or '' }}</textarea>
+            </div>
+
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+                <button type="submit" class="cta">
+                    {% if current_snippet %}Update Snippet{% else %}Save Snippet{% endif %}
+                </button>
+                {% if current_snippet %}
+                <button type="submit" name="clear" value="1" class="cta tertiary"
+                        onclick="return confirm('Are you sure you want to remove the analytics snippet?');">
+                    Clear Snippet
+                </button>
+                {% endif %}
+            </div>
+        </form>
+
+        {% if current_snippet %}
+        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
+            <h3 style="margin-bottom: 0.75rem; font-size: 1rem; font-weight: 600;">Current Snippet Preview</h3>
+            <div style="background-color: #1f2937; color: #f9fafb; padding: 1rem; border-radius: 6px; overflow-x: auto;">
+                <pre style="margin: 0; font-family: monospace; font-size: 0.875rem; white-space: pre-wrap; word-break: break-all;"><code>{{ current_snippet }}</code></pre>
+            </div>
+            <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280;">
+                Last updated: {{ updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else 'Never' }}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Supported Analytics Providers</h2>
+            <p class="panel-subtitle">Examples of compatible tracking services</p>
+        </div>
+    </div>
+
+    <div style="padding: 1.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Google Analytics</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Most popular analytics platform. Get your tracking code from Google Analytics &gt; Admin &gt; Tracking Info.
+                </p>
+            </div>
+
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Matomo (Piwik)</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Open-source, privacy-focused alternative. Self-hosted or cloud option available.
+                </p>
+            </div>
+
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Plausible Analytics</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Lightweight, privacy-friendly analytics. No cookies, GDPR compliant.
+                </p>
+            </div>
+
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Fathom Analytics</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Simple, privacy-focused analytics without cookie banners.
+                </p>
+            </div>
+
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">GoatCounter</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Free, open-source web analytics platform focused on privacy.
+                </p>
+            </div>
+
+            <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 600;">Custom</h4>
+                <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                    Any JavaScript-based tracking code will work. Just paste the entire snippet.
+                </p>
+            </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding: 1rem; background-color: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.875rem;">
+                <strong>Privacy Note:</strong> When using analytics, ensure you comply with GDPR, CCPA, and other privacy regulations.
+                Consider using privacy-friendly alternatives like Plausible or Fathom that don't require cookie consent banners.
+            </p>
+        </div>
+    </div>
+</section>
+
+<style>
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.alert.success {
+    background-color: #d1fae5;
+    border-left: 4px solid #10b981;
+    color: #065f46;
+}
+
+.alert.error {
+    background-color: #fee2e2;
+    border-left: 4px solid #ef4444;
+    color: #991b1b;
+}
+</style>
+{% endblock %}

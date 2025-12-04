@@ -315,6 +315,26 @@ class ProposedFeed(Base):
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
 
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(64), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    last_used_at = Column(DateTime, nullable=True)
+
+
+class SiteSettings(Base):
+    __tablename__ = "site_settings"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(64), nullable=False, unique=True, index=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
 @dataclass(frozen=True)
 class PodcastFeed:
     name: str
@@ -1062,7 +1082,13 @@ class RssTranscriptionPipeline:
         with tempfile.NamedTemporaryFile(delete=False, suffix=self._guess_extension(audio_url)) as tmp_file:
             self._check_cancel()
             logger.info("Downloading %s", audio_url)
-            response = requests.get(audio_url, stream=True, timeout=60)
+            # Add headers to avoid 403 Forbidden from hosts like Buzzsprout
+            headers = {
+                "User-Agent": "Mozilla/5.0 (compatible; RSS-Analysis/1.0; +https://github.com/yourusername/rss-analysis)",
+                "Accept": "audio/mpeg, audio/*, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            response = requests.get(audio_url, headers=headers, stream=True, timeout=60)
             response.raise_for_status()
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:

@@ -6,6 +6,9 @@
     <title>{% block title %}Civic Soundscapes{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+    {% if analytics_snippet %}
+    {{ analytics_snippet|safe }}
+    {% endif %}
 </head>
 <body>
     <header>
@@ -23,7 +26,7 @@
             <a href="{{ url_for('topic_graph') }}">Graph</a>
             <a href="{{ url_for('podcast_list') }}">All Podcasts</a>
             <a href="{{ url_for('transcript_list') }}">All Transcripts</a>
-            <a href="{{ url_for('manage_feeds') }}">Manage Feeds</a>
+            <a href="{{ url_for('admin_panel') }}">Settings</a>
         </nav>
     </header>
     <main>

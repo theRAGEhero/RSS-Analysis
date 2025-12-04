@@ -1,0 +1,93 @@
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Manage Podcast Sources</h2>
+            <p class="panel-subtitle">Add new RSS feeds or import batches from your curation spreadsheet.</p>
+        </div>
+        <div class="feed-hero-stats" style="display: flex; gap: 2rem; align-items: center;">
+            <div class="hero-stat">
+                <span class="hero-stat-value">{{ feeds|length if feeds else 0 }}</span>
+                <span class="hero-stat-label">Tracked feeds</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 1.5rem;">
+        <p>To manage feeds in detail, <a href="{{ url_for('manage_feeds') }}" class="cta">visit the full Feed Management page</a></p>
+
+        {% if feeds %}
+        <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Active Feeds</h3>
+        <div class="feed-list">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>RSS URL</th>
+                        <th>Category</th>
+                        <th>Language</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for feed in feeds[:10] %}
+                    <tr>
+                        <td><strong>{{ feed.name }}</strong></td>
+                        <td><code style="font-size: 0.875rem;">{{ feed.rss_url[:50] }}...</code></td>
+                        <td>{{ feed.category or 'N/A' }}</td>
+                        <td>{{ feed.language or 'N/A' }}</td>
+                        <td>{{ feed.created_at.strftime('%Y-%m-%d') if feed.created_at else 'N/A' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if feeds|length > 10 %}
+            <p style="margin-top: 1rem; text-align: center; color: #6b7280;">
+                Showing 10 of {{ feeds|length }} feeds. <a href="{{ url_for('manage_feeds') }}">View all →</a>
+            </p>
+            {% endif %}
+        </div>
+        {% else %}
+        <p>No feeds configured yet.</p>
+        {% endif %}
+    </div>
+</section>
+
+<style>
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.data-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.hero-stat {
+    text-align: center;
+}
+
+.hero-stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #3b82f6;
+}
+
+.hero-stat-label {
+    display: block;
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+</style>

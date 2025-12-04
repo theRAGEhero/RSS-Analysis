@@ -46,6 +46,8 @@ from rss_transcriber import (
     RssTranscriptionPipeline,
     PipelineCancelled,
     ProposedFeed,
+    ApiKey,
+    SiteSettings,
     build_episode_graph,
     DEFAULT_MODEL,
     DEFAULT_DB_PATH,
@@ -56,6 +58,9 @@ from rss_transcriber import (
     load_feeds_from_db,
     setup_logging,
 )
+
+import api
+import secrets
 
 
 @dataclass
@@ -1932,6 +1937,194 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         with get_session() as session:
             graph = build_episode_graph(session, limit=200)
             return jsonify(graph)
+
+    # Unified Admin Panel
+    @app.route("/admin", methods=["GET", "POST"])
+    @require_feed_auth
+    def admin_panel():
+        """Unified admin panel with tabs for feeds, API keys, and site settings"""
+        with get_session() as session:
+            # Handle POST request (site settings form submission)
+            if request.method == "POST" and request.form.get("tab") == "site-settings":
+                # Check if clearing the snippet
+                if request.form.get("clear"):
+                    setting = session.execute(
+                        select(SiteSettings).where(SiteSettings.key == "analytics_snippet")
+                    ).scalar_one_or_none()
+
+                    if setting:
+                        session.delete(setting)
+                        session.commit()
+
+                    # Reload all data for display
+                    feeds = session.execute(select(FeedSubscription).order_by(FeedSubscription.name)).scalars().all()
+                    keys = session.execute(select(ApiKey).order_by(ApiKey.created_at.desc())).scalars().all()
+
+                    return render_template(
+                        "admin.html",
+                        feeds=feeds,
+                        keys=keys,
+                        success="Analytics snippet cleared successfully.",
+                        current_snippet=None,
+                        updated_at=None
+                    )
+
+                # Save or update analytics snippet
+                snippet = request.form.get("analytics_snippet", "").strip()
+
+                setting = session.execute(
+                    select(SiteSettings).where(SiteSettings.key == "analytics_snippet")
+                ).scalar_one_or_none()
+
+                if setting:
+                    setting.value = snippet if snippet else None
+                    setting.updated_at = dt.datetime.now(dt.timezone.utc)
+                else:
+                    setting = SiteSettings(
+                        key="analytics_snippet",
+                        value=snippet if snippet else None
+                    )
+                    session.add(setting)
+
+                session.commit()
+
+                # Reload all data for display
+                feeds = session.execute(select(FeedSubscription).order_by(FeedSubscription.name)).scalars().all()
+                keys = session.execute(select(ApiKey).order_by(ApiKey.created_at.desc())).scalars().all()
+
+                return render_template(
+                    "admin.html",
+                    feeds=feeds,
+                    keys=keys,
+                    success="Settings saved successfully." if snippet else "Analytics snippet cleared.",
+                    current_snippet=setting.value,
+                    updated_at=setting.updated_at
+                )
+
+            # GET request - load all data
+            feeds = session.execute(select(FeedSubscription).order_by(FeedSubscription.name)).scalars().all()
+            keys = session.execute(select(ApiKey).order_by(ApiKey.created_at.desc())).scalars().all()
+            setting = session.execute(
+                select(SiteSettings).where(SiteSettings.key == "analytics_snippet")
+            ).scalar_one_or_none()
+
+            return render_template(
+                "admin.html",
+                feeds=feeds,
+                keys=keys,
+                current_snippet=setting.value if setting else None,
+                updated_at=setting.updated_at if setting else None
+            )
+
+    # API Key Management Routes (redirect to unified admin)
+    @app.route("/admin/api-keys", methods=["GET"])
+    @require_feed_auth
+    def api_keys_admin():
+        """Redirect to unified admin panel - API Keys tab"""
+        return redirect(url_for('admin_panel') + '#api-keys')
+
+    @app.route("/admin/api-keys/generate", methods=["POST"])
+    @require_feed_auth
+    def generate_api_key():
+        """Generate a new API key"""
+        key_name = request.form.get("name", "").strip()
+
+        if not key_name:
+            return jsonify({"error": "Key name is required"}), 400
+
+        # Generate secure random key
+        new_key = secrets.token_urlsafe(32)
+
+        with get_session() as session:
+            api_key = ApiKey(
+                key=new_key,
+                name=key_name,
+                is_active=1,
+            )
+            session.add(api_key)
+            session.commit()
+
+            return jsonify({
+                "success": True,
+                "key": new_key,
+                "name": key_name,
+                "id": api_key.id,
+            })
+
+    @app.route("/admin/api-keys/<int:key_id>/revoke", methods=["POST"])
+    @require_feed_auth
+    def revoke_api_key(key_id: int):
+        """Revoke an API key"""
+        with get_session() as session:
+            api_key = session.execute(
+                select(ApiKey).where(ApiKey.id == key_id)
+            ).scalar_one_or_none()
+
+            if not api_key:
+                return jsonify({"error": "API key not found"}), 404
+
+            api_key.is_active = 0
+            session.commit()
+
+            return jsonify({"success": True})
+
+    @app.route("/admin/api-keys/<int:key_id>/activate", methods=["POST"])
+    @require_feed_auth
+    def activate_api_key(key_id: int):
+        """Activate a revoked API key"""
+        with get_session() as session:
+            api_key = session.execute(
+                select(ApiKey).where(ApiKey.id == key_id)
+            ).scalar_one_or_none()
+
+            if not api_key:
+                return jsonify({"error": "API key not found"}), 404
+
+            api_key.is_active = 1
+            session.commit()
+
+            return jsonify({"success": True})
+
+    @app.route("/admin/api-keys/<int:key_id>/delete", methods=["POST"])
+    @require_feed_auth
+    def delete_api_key(key_id: int):
+        """Delete an API key permanently"""
+        with get_session() as session:
+            api_key = session.execute(
+                select(ApiKey).where(ApiKey.id == key_id)
+            ).scalar_one_or_none()
+
+            if not api_key:
+                return jsonify({"error": "API key not found"}), 404
+
+            session.delete(api_key)
+            session.commit()
+
+            return jsonify({"success": True})
+
+    # Site Settings Routes (redirect to unified admin)
+    @app.route("/admin/settings", methods=["GET"])
+    @require_feed_auth
+    def admin_settings():
+        """Redirect to unified admin panel - Site Settings tab"""
+        return redirect(url_for('admin_panel') + '#site-settings')
+
+    # Context processor to inject analytics snippet into all templates
+    @app.context_processor
+    def inject_analytics():
+        """Inject analytics snippet into all templates"""
+        with get_session() as session:
+            setting = session.execute(
+                select(SiteSettings).where(SiteSettings.key == "analytics_snippet")
+            ).scalar_one_or_none()
+
+            return {
+                'analytics_snippet': setting.value if setting and setting.value else None
+            }
+
+    # Register API blueprint
+    api.init_api(engine)
+    app.register_blueprint(api.api_bp)
 
     return app
 

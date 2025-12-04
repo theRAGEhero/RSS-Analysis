@@ -1,0 +1,379 @@
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>API Key Management</h2>
+            <p class="panel-subtitle">Generate and manage API keys for programmatic access to transcript data.</p>
+        </div>
+        <div>
+            <button class="cta" onclick="showGenerateModal()">Generate New API Key</button>
+        </div>
+    </div>
+
+    <div class="alert info" style="margin: 1.5rem; padding: 1rem; background-color: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+        <strong>Note:</strong> API access requires manual approval. Keys generated here are for approved users only.
+    </div>
+
+    {% if keys %}
+    <div style="padding: 0 1.5rem 1.5rem 1.5rem;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key in keys %}
+                <tr data-key-id="{{ key.id }}">
+                    <td><strong>{{ key.name }}</strong></td>
+                    <td>
+                        <code class="api-key-display">{{ key.key[:12] }}...{{ key.key[-8:] }}</code>
+                    </td>
+                    <td>
+                        {% if key.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Revoked</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ key.created_at.strftime('%Y-%m-%d %H:%M') if key.created_at else 'N/A' }}</td>
+                    <td>{{ key.last_used_at.strftime('%Y-%m-%d %H:%M') if key.last_used_at else 'Never' }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            {% if key.is_active %}
+                            <button class="btn-action btn-warning" onclick="revokeKey({{ key.id }}, '{{ key.name }}')">Revoke</button>
+                            {% else %}
+                            <button class="btn-action btn-success" onclick="activateKey({{ key.id }}, '{{ key.name }}')">Activate</button>
+                            {% endif %}
+                            <button class="btn-action btn-danger" onclick="deleteKey({{ key.id }}, '{{ key.name }}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 3rem; text-align: center; color: #6b7280;">
+        <p>No API keys yet. Generate your first key to get started with the API.</p>
+    </div>
+    {% endif %}
+
+    <div style="padding: 1.5rem; background-color: #f9fafb; border-top: 1px solid #e5e7eb; margin-top: 1rem;">
+        <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+            <strong>API Documentation:</strong> See <a href="/api_docs" target="_blank">API_DOCS.md</a> for complete endpoint documentation and examples.
+        </p>
+    </div>
+</section>
+
+<!-- Modal for generating new key -->
+<div id="generate-modal-admin" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Generate New API Key</h3>
+            <button class="modal-close" onclick="closeGenerateModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label>
+                <span>Key Name / Description</span>
+                <input type="text" id="new-key-name-admin" placeholder="e.g., Mobile App, Analytics Service" required>
+                <small class="hint">Give this key a descriptive name to remember its purpose</small>
+            </label>
+            <div id="generate-error-admin" class="alert error" style="display: none;"></div>
+            <div id="generate-success-admin" class="alert success" style="display: none;">
+                <p><strong>API Key Generated!</strong></p>
+                <p>Copy this key now - it won't be shown again:</p>
+                <div class="key-display">
+                    <code id="generated-key-admin"></code>
+                    <button onclick="copyToClipboard()">Copy</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="cta" id="generate-btn-admin" onclick="generateKey()">Generate Key</button>
+            <button class="cta tertiary" onclick="closeGenerateModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.api-key-display {
+    font-family: monospace;
+    background-color: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-inactive {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-action {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-action:hover {
+    opacity: 0.8;
+}
+
+.btn-warning {
+    background-color: #fbbf24;
+    color: #78350f;
+}
+
+.btn-success {
+    background-color: #34d399;
+    color: #065f46;
+}
+
+.btn-danger {
+    background-color: #f87171;
+    color: #7f1d1d;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    padding: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.key-display {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.key-display code {
+    flex: 1;
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    word-break: break-all;
+}
+
+.key-display button {
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+</style>
+
+<script>
+function showGenerateModal() {
+    document.getElementById('generate-modal-admin').style.display = 'flex';
+    document.getElementById('new-key-name-admin').value = '';
+    document.getElementById('generate-error-admin').style.display = 'none';
+    document.getElementById('generate-success-admin').style.display = 'none';
+    document.getElementById('generate-btn-admin').style.display = 'block';
+}
+
+function closeGenerateModal() {
+    document.getElementById('generate-modal-admin').style.display = 'none';
+}
+
+async function generateKey() {
+    const name = document.getElementById('new-key-name-admin').value.trim();
+    const errorEl = document.getElementById('generate-error-admin');
+    const successEl = document.getElementById('generate-success-admin');
+    const generateBtn = document.getElementById('generate-btn-admin');
+
+    if (!name) {
+        errorEl.textContent = 'Please enter a key name';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    errorEl.style.display = 'none';
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+
+    try {
+        const formData = new FormData();
+        formData.append('name', name);
+
+        const response = await fetch('/admin/api-keys/generate', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            document.getElementById('generated-key-admin').textContent = data.key;
+            successEl.style.display = 'block';
+            generateBtn.style.display = 'none';
+
+            // Reload page after 5 seconds
+            setTimeout(() => {
+                location.reload();
+            }, 5000);
+        } else {
+            errorEl.textContent = data.error || 'Failed to generate key';
+            errorEl.style.display = 'block';
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate Key';
+        }
+    } catch (error) {
+        errorEl.textContent = 'Network error: ' + error.message;
+        errorEl.style.display = 'block';
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate Key';
+    }
+}
+
+function copyToClipboard() {
+    const keyText = document.getElementById('generated-key-admin').textContent;
+    navigator.clipboard.writeText(keyText).then(() => {
+        alert('API key copied to clipboard!');
+    });
+}
+
+async function revokeKey(keyId, keyName) {
+    if (!confirm(`Revoke API key "${keyName}"? It will stop working immediately.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/revoke`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to revoke key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function activateKey(keyId, keyName) {
+    if (!confirm(`Activate API key "${keyName}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/activate`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to activate key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function deleteKey(keyId, keyName) {
+    if (!confirm(`PERMANENTLY DELETE API key "${keyName}"? This cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api-keys/${keyId}/delete`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete key');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+// Close modal when clicking outside
+document.getElementById('generate-modal-admin')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeGenerateModal();
+    }
+});
+</script>

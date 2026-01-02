@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover - optional dependency
     np = None  # type: ignore
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlparse, urlencode, urljoin
 from typing import Optional, Any, Dict, List, Tuple, Set
 
 SRC_DIR = Path(__file__).resolve().parent
@@ -352,6 +352,22 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         if params:
             location = f"{location}?{urlencode({k: v for k, v in params.items() if v is not None})}"
         return redirect(location, 303)
+
+    def get_site_base_url() -> str:
+        configured = (os.getenv("SITE_BASE_URL") or "").strip()
+        if configured:
+            return configured.rstrip("/")
+        return request.url_root.rstrip("/")
+
+    def format_lastmod(value: Optional[dt.datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, dt.datetime):
+            return value.date().isoformat()
+        return None
+
+    def absolute_url(path: str) -> str:
+        return urljoin(f"{get_site_base_url()}/", path.lstrip("/"))
 
     def get_pipeline_job(job_id: str) -> Optional[PipelineJobState]:
         with job_lock:
@@ -1164,6 +1180,66 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                 propose_status=propose_status,
                 propose_message=propose_message,
             )
+
+    @app.route("/robots.txt")
+    def robots():
+        sitemap_url = absolute_url("/sitemap.xml")
+        content = "\n".join(
+            [
+                "User-agent: *",
+                "Allow: /",
+                f"Sitemap: {sitemap_url}",
+                "",
+            ]
+        )
+        return Response(content, mimetype="text/plain")
+
+    @app.route("/sitemap.xml")
+    def sitemap():
+        urls: List[Tuple[str, Optional[str]]] = [
+            (absolute_url("/"), None),
+            (absolute_url("/podcasts"), None),
+            (absolute_url("/transcripts"), None),
+            (absolute_url("/graph"), None),
+        ]
+
+        with get_session() as session:
+            podcasts = (
+                session.execute(select(Podcast.id, Podcast.name))
+                .all()
+            )
+            for podcast_id, name in podcasts:
+                slug = slugify(name)
+                urls.append((absolute_url(f"/podcasts/{slug}"), None))
+
+            episodes = (
+                session.execute(
+                    select(
+                        Episode.id,
+                        Episode.transcribed_at,
+                        Episode.published_at,
+                    ).where(Episode.transcript != None)  # noqa: E711
+                )
+                .all()
+            )
+            for episode_id, transcribed_at, published_at in episodes:
+                lastmod = format_lastmod(transcribed_at or published_at)
+                urls.append((absolute_url(f"/episodes/{episode_id}"), lastmod))
+
+        url_nodes = []
+        for loc, lastmod in urls:
+            if lastmod:
+                url_nodes.append(
+                    f"<url><loc>{loc}</loc><lastmod>{lastmod}</lastmod></url>"
+                )
+            else:
+                url_nodes.append(f"<url><loc>{loc}</loc></url>")
+
+        body = "".join(url_nodes)
+        xml = f'<?xml version="1.0" encoding="UTF-8"?>' \
+              f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' \
+              f"{body}</urlset>"
+        return Response(xml, mimetype="application/xml")
 
     @app.route("/feeds/propose", methods=["POST"])
     def propose_feed_route():

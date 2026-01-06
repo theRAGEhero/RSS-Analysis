@@ -15,9 +15,15 @@ data/*.sqlite
 data/*.sqlite.*
 *.bak
 
+# SQLite journals
+data/*.sqlite-journal
+
 # Logs and runtime artifacts
 logs/
 *.log
+
+# Embedding storage
+data/chroma/
 
 # OS metadata
 .DS_Store

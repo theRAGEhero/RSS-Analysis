@@ -21,6 +21,9 @@
         <button class="admin-tab" data-tab="site-settings" onclick="switchTab('site-settings')">
             Site Settings
         </button>
+        <button class="admin-tab" data-tab="embeddings" onclick="switchTab('embeddings')">
+            Embeddings
+        </button>
     </nav>
 
     <div class="admin-tab-content">
@@ -37,6 +40,11 @@
         <!-- Site Settings Tab -->
         <div id="tab-site-settings" class="tab-panel">
             {% include 'admin_site_settings_content.html' %}
+        </div>
+
+        <!-- Embeddings Tab -->
+        <div id="tab-embeddings" class="tab-panel">
+            {% include 'admin_embeddings_content.html' %}
         </div>
     </div>
 </div>
@@ -124,7 +132,7 @@ function switchTab(tabName) {
 // Handle initial page load with hash
 window.addEventListener('DOMContentLoaded', function() {
     const hash = window.location.hash.substring(1);
-    if (hash && ['feeds', 'api-keys', 'site-settings'].includes(hash)) {
+    if (hash && ['feeds', 'api-keys', 'site-settings', 'embeddings'].includes(hash)) {
         switchTab(hash);
     }
 });
@@ -132,7 +140,7 @@ window.addEventListener('DOMContentLoaded', function() {
 // Handle browser back/forward
 window.addEventListener('hashchange', function() {
     const hash = window.location.hash.substring(1);
-    if (hash && ['feeds', 'api-keys', 'site-settings'].includes(hash)) {
+    if (hash && ['feeds', 'api-keys', 'site-settings', 'embeddings'].includes(hash)) {
         switchTab(hash);
     }
 });

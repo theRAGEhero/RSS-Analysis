@@ -1,0 +1,345 @@
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Embedding Pipeline</h2>
+            <p class="panel-subtitle">Monitor and embed transcript data into ChromaDB.</p>
+        </div>
+        <div class="feed-hero-stats" style="display: flex; gap: 2rem; align-items: center;">
+            <div class="hero-stat">
+                <span class="hero-stat-value">{{ embedding_overview.stats.total if embedding_overview else 0 }}</span>
+                <span class="hero-stat-label">Transcripts</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-value">{{ embedding_overview.stats.embedded if embedding_overview else 0 }}</span>
+                <span class="hero-stat-label">Embedded</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-value">{{ embedding_overview.stats.pending if embedding_overview else 0 }}</span>
+                <span class="hero-stat-label">Pending</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-value">{{ embedding_overview.stats.failed if embedding_overview else 0 }}</span>
+                <span class="hero-stat-label">Failed</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 1.5rem;">
+        <div class="embedding-actions">
+            <button class="cta" id="start-embedding-run">Embed pending transcripts</button>
+            <span class="muted" id="embedding-run-note">Runs against transcripts that are not yet embedded.</span>
+        </div>
+
+        <div class="embedding-status" id="embedding-status-panel">
+            <strong>Status:</strong>
+            <span id="embedding-status-text">
+                {{ embedding_job.status if embedding_job else "idle" }}
+            </span>
+            <span class="muted" id="embedding-status-details">
+                {% if embedding_job and embedding_job.current_episode %}
+                    Running: {{ embedding_job.current_episode }}
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="embedding-config">
+            <h3>Embedding configuration</h3>
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <th>Collection</th>
+                        <td>{{ embedding_defaults.collection }}</td>
+                    </tr>
+                    <tr>
+                        <th>Chroma storage</th>
+                        <td><code>{{ embedding_defaults.chroma_dir }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Model</th>
+                        <td>{{ embedding_defaults.model }}</td>
+                    </tr>
+                    <tr>
+                        <th>Chunk size</th>
+                        <td>{{ embedding_defaults.chunk_size }} words</td>
+                    </tr>
+                    <tr>
+                        <th>Chunk overlap</th>
+                        <td>{{ embedding_defaults.chunk_overlap }} words</td>
+                    </tr>
+                    <tr>
+                        <th>Ollama URL</th>
+                        <td><code>{{ embedding_defaults.ollama_url }}</code></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="embedding-log">
+            <h3>Latest output</h3>
+            <pre id="embedding-log-output">{% if embedding_job %}{{ embedding_job.messages | join('\\n') }}{% else %}No embedding run yet.{% endif %}</pre>
+        </div>
+
+        <div class="embedding-query">
+            <h3>Search embedded chunks</h3>
+            <form id="embedding-query-form" class="embedding-query-form">
+                <input type="text" id="embedding-query-input" placeholder="Ask a question or search by phrase..." required />
+                <button type="submit" class="cta">Search</button>
+            </form>
+            <div class="embedding-query-meta">
+                <label for="embedding-query-topk">Results:</label>
+                <input type="number" id="embedding-query-topk" min="1" max="20" value="5" />
+            </div>
+            <div id="embedding-query-results" class="embedding-query-results"></div>
+        </div>
+
+        <div class="embedding-table">
+            <h3>Recent episodes</h3>
+            {% if embedding_overview and embedding_overview["items"] %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Episode</th>
+                        <th>Podcast</th>
+                        <th>Status</th>
+                        <th>Chunks</th>
+                        <th>Embedded At</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in embedding_overview["items"] %}
+                    <tr>
+                        <td>{{ item.episode_title }}</td>
+                        <td>{{ item.podcast_name }}</td>
+                        <td class="status-{{ item.status }}">{{ item.status }}</td>
+                        <td>{{ item.chunk_count if item.chunk_count is not none else '—' }}</td>
+                        <td>
+                            {% if item.last_embedded_at %}
+                                {{ item.last_embedded_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="error-cell">{{ item.error_message or '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No transcripts found yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<style>
+.embedding-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.embedding-status {
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.embedding-config {
+    margin-bottom: 2rem;
+}
+
+.embedding-log pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 1rem;
+    border-radius: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}
+
+.embedding-table {
+    margin-top: 2rem;
+}
+
+.embedding-query {
+    margin-top: 2rem;
+}
+
+.embedding-query-form {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.embedding-query-form input[type="text"] {
+    flex: 1;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+.embedding-query-meta {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 1rem;
+}
+
+.embedding-query-results {
+    display: grid;
+    gap: 1rem;
+}
+
+.embedding-result {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.85rem;
+    background: #f8fafc;
+}
+
+.embedding-result h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.embedding-result .meta {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+}
+
+.embedding-result .chunk {
+    font-size: 0.9rem;
+    color: #111827;
+    line-height: 1.4;
+}
+
+.status-embedded {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.status-pending,
+.status-running {
+    color: #d97706;
+    font-weight: 600;
+}
+
+.status-failed {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.error-cell {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #dc2626;
+}
+</style>
+
+<script>
+const embeddingStatusEndpoint = "{{ url_for('embedding_status') }}";
+const embeddingRunEndpoint = "{{ url_for('run_embedding_job') }}";
+const embeddingQueryEndpoint = "{{ url_for('query_embeddings') }}";
+
+async function fetchEmbeddingStatus(jobId = null) {
+    const url = jobId ? `${embeddingStatusEndpoint}?job_id=${jobId}` : embeddingStatusEndpoint;
+    const response = await fetch(url, {
+        headers: { "Accept": "application/json" },
+        credentials: "same-origin"
+    });
+    if (!response.ok) {
+        return null;
+    }
+    return await response.json();
+}
+
+function updateEmbeddingUI(payload) {
+    if (!payload) {
+        return;
+    }
+    const statusText = document.getElementById("embedding-status-text");
+    const statusDetails = document.getElementById("embedding-status-details");
+    const logOutput = document.getElementById("embedding-log-output");
+
+    const statusValue = payload.status || "idle";
+    statusText.textContent = statusValue;
+    statusDetails.textContent = payload.current_episode ? `Running: ${payload.current_episode}` : "";
+
+    if (payload.messages && payload.messages.length) {
+        logOutput.textContent = payload.messages.join("\\n");
+    }
+}
+
+async function startEmbeddingRun() {
+    const response = await fetch(embeddingRunEndpoint, { method: "POST", credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) {
+        alert(payload.error || "Unable to start embedding run.");
+        return;
+    }
+    updateEmbeddingUI({ status: "running" });
+    pollEmbeddingStatus(payload.job_id);
+}
+
+async function pollEmbeddingStatus(jobId) {
+    const payload = await fetchEmbeddingStatus(jobId);
+    updateEmbeddingUI(payload);
+    if (payload && payload.status && ["running", "pending"].includes(payload.status)) {
+        setTimeout(() => pollEmbeddingStatus(jobId), 4000);
+    }
+}
+
+document.getElementById("start-embedding-run").addEventListener("click", () => {
+    startEmbeddingRun();
+});
+
+document.getElementById("embedding-query-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = document.getElementById("embedding-query-input");
+    const topkInput = document.getElementById("embedding-query-topk");
+    const resultsContainer = document.getElementById("embedding-query-results");
+    resultsContainer.textContent = "Searching...";
+    const payload = {
+        query: input.value,
+        top_k: parseInt(topkInput.value || "5", 10),
+    };
+    const response = await fetch(embeddingQueryEndpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        resultsContainer.textContent = data.error || "Query failed.";
+        return;
+    }
+    if (!data.results || !data.results.length) {
+        resultsContainer.textContent = "No results yet.";
+        return;
+    }
+    resultsContainer.innerHTML = data.results.map((item) => {
+        const title = item.episode_title || "Episode";
+        const podcast = item.podcast_name || "Unknown podcast";
+        const link = item.episode_url ? `<a href="${item.episode_url}" target="_blank" rel="noopener">Open episode</a>` : "";
+        const distance = (item.distance !== undefined && item.distance !== null) ? item.distance.toFixed(4) : "n/a";
+        const chunk = item.document || "";
+        return `
+            <div class="embedding-result">
+                <h4>${title}</h4>
+                <div class="meta">${podcast} · distance ${distance} ${link}</div>
+                <div class="chunk">${chunk}</div>
+            </div>
+        `;
+    }).join("");
+});
+
+window.addEventListener("DOMContentLoaded", async () => {
+    const payload = await fetchEmbeddingStatus();
+    updateEmbeddingUI(payload);
+});
+</script>

@@ -143,3 +143,31 @@ See [API_DOCS.md](./API_DOCS.md) for complete endpoint documentation, examples, 
 - Deepgram billing applies per minute of transcribed audio. Consider limiting `--max-episodes` on the first run.
 - Some feeds may lack downloadable audio URLs or enforce geo/IP restrictions; such episodes are logged and skipped.
 - The pipeline logs to stdout. Adjust logging level near the top of `src/rss_transcriber.py` if required.
+
+## Semantic Search Core (Embeddings)
+
+This project can export transcripts to JSON and embed them locally with Ollama + ChromaDB.
+
+### 1) Start Ollama and pull the embed model
+
+```bash
+ollama pull bge-m3
+ollama serve
+```
+
+### 2) Chunk + embed into ChromaDB
+
+```bash
+python src/embedding_pipeline.py embed \
+  --db sqlite:///data/podcasts.sqlite \
+  --chroma-dir data/chroma \
+  --collection transcripts \
+  --chunk-size 450 \
+  --chunk-overlap 75
+```
+
+Embedding runs track per-episode status in the database, so reruns skip already embedded episodes. You can change the base URL with `OLLAMA_BASE_URL` if Ollama is not running on `localhost:11434`.
+
+Environment options:
+- `AUTO_EMBEDDINGS=1` to embed automatically after each ingest (default on).
+- `CHROMA_DIR`, `CHROMA_COLLECTION`, `OLLAMA_EMBED_MODEL`, `EMBEDDING_CHUNK_SIZE`, `EMBEDDING_CHUNK_OVERLAP` to customize the embedding pipeline.

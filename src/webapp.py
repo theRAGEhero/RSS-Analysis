@@ -43,6 +43,7 @@ from rss_transcriber import (
     FeedSubscription,
     Podcast,
     Transcript,
+    EmbeddingStatus,
     RssTranscriptionPipeline,
     PipelineCancelled,
     ProposedFeed,
@@ -53,6 +54,10 @@ from rss_transcriber import (
     DEFAULT_DB_PATH,
     DEFAULT_LOG_DIR,
     DEFAULT_OUTPUT_DIR,
+    DEFAULT_CHROMA_DIR,
+    DEFAULT_CHROMA_COLLECTION,
+    DEFAULT_EMBEDDING_CHUNK_SIZE,
+    DEFAULT_EMBEDDING_CHUNK_OVERLAP,
     ensure_transcript_metadata_columns,
     fetch_feed,
     load_feeds_from_db,
@@ -244,6 +249,100 @@ class PipelineJobConfig:
     force_reprocess: bool = False
 
 
+@dataclass
+class EmbeddingJobState:
+    id: str
+    status: str = "pending"
+    episodes_total: int = 0
+    episodes_embedded: int = 0
+    episodes_failed: int = 0
+    started_at: Optional[dt.datetime] = None
+    finished_at: Optional[dt.datetime] = None
+    current_episode: Optional[str] = None
+    stage: Optional[str] = None
+    error: Optional[str] = None
+    messages: List[str] = field(default_factory=list)
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+
+    def mark_started(self) -> None:
+        with self._lock:
+            self.status = "running"
+            self.stage = "initialising"
+            self.started_at = dt.datetime.utcnow()
+
+    def mark_completed(self) -> None:
+        with self._lock:
+            self.status = "completed"
+            self.stage = "completed"
+            self.finished_at = dt.datetime.utcnow()
+
+    def mark_failed(self, message: str) -> None:
+        with self._lock:
+            self.status = "failed"
+            self.stage = "failed"
+            self.error = message
+            self.finished_at = dt.datetime.utcnow()
+            self._append_message(f"Embedding failed: {message}")
+
+    def _append_message(self, message: str) -> None:
+        if not message:
+            return
+        self.messages.append(message)
+        if len(self.messages) > 25:
+            self.messages = self.messages[-25:]
+
+    def apply_event(self, event: Dict[str, Any]) -> None:
+        def _coerce_int(value: Any) -> Optional[int]:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        with self._lock:
+            for attr in ("episodes_total", "episodes_embedded", "episodes_failed"):
+                if attr in event:
+                    coerced = _coerce_int(event.get(attr))
+                    if coerced is not None:
+                        setattr(self, attr, coerced)
+
+            if "current_episode" in event:
+                self.current_episode = event.get("current_episode") or None
+
+            stage = event.get("stage")
+            if stage:
+                self.stage = str(stage)
+                if self.stage == "completed" and self.status != "failed":
+                    self.status = "completed"
+                    if self.finished_at is None:
+                        self.finished_at = dt.datetime.utcnow()
+                elif self.stage == "failed":
+                    self.status = "failed"
+                    if self.finished_at is None:
+                        self.finished_at = dt.datetime.utcnow()
+                elif self.stage == "start":
+                    self.status = "running"
+
+            message = event.get("message")
+            if message:
+                self._append_message(str(message))
+
+    def as_dict(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "id": self.id,
+                "status": self.status,
+                "stage": self.stage,
+                "episodes_total": self.episodes_total,
+                "episodes_embedded": self.episodes_embedded,
+                "episodes_failed": self.episodes_failed,
+                "current_episode": self.current_episode,
+                "started_at": self.started_at.isoformat() if self.started_at else None,
+                "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+                "error": self.error,
+                "messages": list(self.messages),
+            }
+
+
 def slugify(value: str) -> str:
     value = value.strip().lower()
     value = re.sub(r"[^a-z0-9]+", "-", value)
@@ -321,9 +420,27 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         "model": os.getenv("PIPELINE_MODEL", DEFAULT_MODEL),
         "max_episodes": 0,
     }
+    def _safe_int(value: str, fallback: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    embedding_defaults = {
+        "database_url": os.getenv("EMBEDDING_DATABASE_URL", f"sqlite:///{resolved_db_path}"),
+        "chroma_dir": str((DEFAULT_CHROMA_DIR if DEFAULT_CHROMA_DIR.is_absolute() else (BASE_DIR / DEFAULT_CHROMA_DIR)).resolve()),
+        "collection": os.getenv("CHROMA_COLLECTION", DEFAULT_CHROMA_COLLECTION),
+        "model": os.getenv("OLLAMA_EMBED_MODEL", "bge-m3"),
+        "chunk_size": _safe_int(os.getenv("EMBEDDING_CHUNK_SIZE", str(DEFAULT_EMBEDDING_CHUNK_SIZE)), DEFAULT_EMBEDDING_CHUNK_SIZE),
+        "chunk_overlap": _safe_int(os.getenv("EMBEDDING_CHUNK_OVERLAP", str(DEFAULT_EMBEDDING_CHUNK_OVERLAP)), DEFAULT_EMBEDDING_CHUNK_OVERLAP),
+        "ollama_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
+    }
     pipeline_jobs: Dict[str, PipelineJobState] = {}
     job_lock = threading.Lock()
     active_pipeline_job_id: Optional[str] = None
+    embedding_jobs: Dict[str, EmbeddingJobState] = {}
+    embedding_job_lock = threading.Lock()
+    active_embedding_job_id: Optional[str] = None
     valid_log_levels = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
     def tail_file(path: Optional[Path], max_lines: int = 40) -> List[str]:
@@ -372,6 +489,16 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
     def get_pipeline_job(job_id: str) -> Optional[PipelineJobState]:
         with job_lock:
             return pipeline_jobs.get(job_id)
+
+    def get_embedding_job(job_id: str) -> Optional[EmbeddingJobState]:
+        with embedding_job_lock:
+            return embedding_jobs.get(job_id)
+
+    def get_active_embedding_job() -> Optional[EmbeddingJobState]:
+        with embedding_job_lock:
+            if active_embedding_job_id:
+                return embedding_jobs.get(active_embedding_job_id)
+        return None
 
     def build_pipeline_config(payload: Dict[str, Any]) -> PipelineJobConfig:
         db_path_value = resolve_path(payload.get("db_path"), pipeline_defaults["db_path"])
@@ -526,6 +653,51 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         worker.start()
         return job
 
+    def start_embedding_job() -> EmbeddingJobState:
+        nonlocal active_embedding_job_id
+        job = EmbeddingJobState(id=str(uuid.uuid4()))
+        job.apply_event({"stage": "queued", "message": "Embedding job queued."})
+
+        def _thread_runner() -> None:
+            nonlocal active_embedding_job_id
+            job.mark_started()
+            try:
+                from embedding_pipeline import embed_transcripts
+
+                chunk_size = embedding_defaults["chunk_size"]
+                chunk_overlap = embedding_defaults["chunk_overlap"]
+                if chunk_overlap >= chunk_size:
+                    chunk_overlap = max(chunk_size - 1, 0)
+
+                embed_transcripts(
+                    database_url=embedding_defaults["database_url"],
+                    chroma_dir=Path(embedding_defaults["chroma_dir"]),
+                    collection_name=embedding_defaults["collection"],
+                    model=embedding_defaults["model"],
+                    chunk_size=chunk_size,
+                    overlap=chunk_overlap,
+                    base_url=embedding_defaults["ollama_url"],
+                    progress_callback=job.apply_event,
+                )
+                job.mark_completed()
+            except Exception as exc:
+                job.mark_failed(str(exc))
+            finally:
+                with embedding_job_lock:
+                    if active_embedding_job_id == job.id:
+                        active_embedding_job_id = None
+
+        worker = threading.Thread(
+            target=_thread_runner,
+            name=f"embedding-run-{job.id}",
+            daemon=True,
+        )
+        with embedding_job_lock:
+            embedding_jobs[job.id] = job
+            active_embedding_job_id = job.id
+        worker.start()
+        return job
+
     def feeds_auth_required() -> bool:
         return bool(feed_admin_user)
 
@@ -552,6 +724,107 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
 
     def get_session() -> Session:
         return SessionLocal()
+
+    def load_embedding_overview(session: Session, limit: int = 50) -> Dict[str, Any]:
+        total_transcripts = session.execute(
+            select(func.count()).select_from(Transcript)
+        ).scalar() or 0
+        embedded = session.execute(
+            select(func.count()).select_from(EmbeddingStatus).where(EmbeddingStatus.status == "embedded")
+        ).scalar() or 0
+        failed = session.execute(
+            select(func.count()).select_from(EmbeddingStatus).where(EmbeddingStatus.status == "failed")
+        ).scalar() or 0
+        running = session.execute(
+            select(func.count()).select_from(EmbeddingStatus).where(EmbeddingStatus.status == "running")
+        ).scalar() or 0
+        pending = max(total_transcripts - embedded - failed - running, 0)
+
+        rows = (
+            session.execute(
+                select(Episode, Podcast, EmbeddingStatus)
+                .join(Podcast, Podcast.id == Episode.podcast_id)
+                .join(Transcript, Transcript.episode_id == Episode.id)
+                .outerjoin(EmbeddingStatus, EmbeddingStatus.episode_id == Episode.id)
+                .order_by(Episode.published_at.desc().nullslast())
+                .limit(limit)
+            )
+            .all()
+        )
+        items = []
+        for episode, podcast, status in rows:
+            status_label = status.status if status else "pending"
+            items.append(
+                {
+                    "episode_id": episode.id,
+                    "episode_title": episode.title or f"Episode {episode.id}",
+                    "podcast_name": podcast.name or "Unknown",
+                    "status": status_label,
+                    "chunk_count": status.chunk_count if status else None,
+                    "last_embedded_at": status.last_embedded_at if status else None,
+                    "error_message": status.error_message if status else None,
+                }
+            )
+
+        return {
+            "stats": {
+                "total": total_transcripts,
+                "embedded": embedded,
+                "pending": pending,
+                "failed": failed,
+                "running": running,
+            },
+            "items": items,
+        }
+
+    def query_embedding_collection(query_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        import chromadb
+        from embedding_pipeline import get_ollama_embedding
+
+        chroma_dir = Path(embedding_defaults["chroma_dir"])
+        collection_name = embedding_defaults["collection"]
+        client = chromadb.PersistentClient(path=str(chroma_dir))
+        collection = client.get_or_create_collection(collection_name)
+        embedding = get_ollama_embedding(
+            query_text,
+            model=embedding_defaults["model"],
+            base_url=embedding_defaults["ollama_url"],
+        )
+        response = collection.query(
+            query_embeddings=[embedding],
+            n_results=top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        documents = response.get("documents", [[]])[0]
+        metadatas = response.get("metadatas", [[]])[0]
+        distances = response.get("distances", [[]])[0]
+
+        results = []
+        for doc, meta, distance in zip(documents, metadatas, distances):
+            meta = meta or {}
+            episode_id = meta.get("episode_id")
+            podcast_name = meta.get("podcast") or ""
+            episode_title = meta.get("episode_title") or ""
+            episode_url = None
+            if episode_id and podcast_name:
+                episode_url = url_for(
+                    "episode_detail",
+                    podcast_slug=slugify(podcast_name),
+                    episode_id=int(episode_id),
+                )
+            results.append(
+                {
+                    "document": doc,
+                    "metadata": meta,
+                    "distance": distance,
+                    "episode_url": episode_url,
+                    "episode_title": episode_title,
+                    "podcast_name": podcast_name,
+                }
+            )
+
+        return results
 
     @app.route("/feeds/import/pipeline/start", methods=["POST"])
     @require_feed_auth
@@ -580,6 +853,49 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
         snapshot = job.as_dict()
         snapshot["log_tail"] = tail_file(job.get_log_path())
         return jsonify(snapshot)
+
+    @app.route("/admin/embeddings/run", methods=["POST"])
+    @require_feed_auth
+    def run_embedding_job():
+        with embedding_job_lock:
+            current_active = active_embedding_job_id
+            if current_active and current_active in embedding_jobs:
+                return jsonify({"error": "Another embedding run is already in progress.", "job_id": current_active}), 409
+        job = start_embedding_job()
+        return jsonify({"job_id": job.id}), 202
+
+    @app.route("/admin/embeddings/status", methods=["GET"])
+    @require_feed_auth
+    def embedding_status():
+        job_id = request.args.get("job_id")
+        if job_id:
+            job = get_embedding_job(job_id)
+            if not job:
+                return jsonify({"error": "Job not found."}), 404
+            return jsonify(job.as_dict())
+
+        job = get_active_embedding_job()
+        if not job:
+            return jsonify({"status": "idle"})
+        return jsonify(job.as_dict())
+
+    @app.route("/admin/embeddings/query", methods=["POST"])
+    @require_feed_auth
+    def query_embeddings():
+        payload = request.get_json(silent=True) or {}
+        query_text = (payload.get("query") or "").strip()
+        if not query_text:
+            return jsonify({"error": "Query text is required."}), 400
+        try:
+            top_k = int(payload.get("top_k", 5))
+        except (TypeError, ValueError):
+            top_k = 5
+        top_k = max(1, min(top_k, 20))
+        try:
+            results = query_embedding_collection(query_text, top_k=top_k)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+        return jsonify({"results": results})
 
     @app.route("/feeds/import/pipeline/stop", methods=["POST"])
     @require_feed_auth
@@ -2035,6 +2351,8 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                     # Reload all data for display
                     feeds = session.execute(select(FeedSubscription).order_by(FeedSubscription.name)).scalars().all()
                     keys = session.execute(select(ApiKey).order_by(ApiKey.created_at.desc())).scalars().all()
+                    embedding_overview = load_embedding_overview(session)
+                    embedding_job = get_active_embedding_job()
 
                     return render_template(
                         "admin.html",
@@ -2042,7 +2360,10 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                         keys=keys,
                         success="Analytics snippet cleared successfully.",
                         current_snippet=None,
-                        updated_at=None
+                        updated_at=None,
+                        embedding_overview=embedding_overview,
+                        embedding_job=embedding_job,
+                        embedding_defaults=embedding_defaults,
                     )
 
                 # Save or update analytics snippet
@@ -2067,6 +2388,8 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                 # Reload all data for display
                 feeds = session.execute(select(FeedSubscription).order_by(FeedSubscription.name)).scalars().all()
                 keys = session.execute(select(ApiKey).order_by(ApiKey.created_at.desc())).scalars().all()
+                embedding_overview = load_embedding_overview(session)
+                embedding_job = get_active_embedding_job()
 
                 return render_template(
                     "admin.html",
@@ -2074,7 +2397,10 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
                     keys=keys,
                     success="Settings saved successfully." if snippet else "Analytics snippet cleared.",
                     current_snippet=setting.value,
-                    updated_at=setting.updated_at
+                    updated_at=setting.updated_at,
+                    embedding_overview=embedding_overview,
+                    embedding_job=embedding_job,
+                    embedding_defaults=embedding_defaults,
                 )
 
             # GET request - load all data
@@ -2083,13 +2409,18 @@ def create_app(database_path: Optional[Path] = None) -> Flask:
             setting = session.execute(
                 select(SiteSettings).where(SiteSettings.key == "analytics_snippet")
             ).scalar_one_or_none()
+            embedding_overview = load_embedding_overview(session)
+            embedding_job = get_active_embedding_job()
 
             return render_template(
                 "admin.html",
                 feeds=feeds,
                 keys=keys,
                 current_snippet=setting.value if setting else None,
-                updated_at=setting.updated_at if setting else None
+                updated_at=setting.updated_at if setting else None,
+                embedding_overview=embedding_overview,
+                embedding_job=embedding_job,
+                embedding_defaults=embedding_defaults,
             )
 
     # API Key Management Routes (redirect to unified admin)

@@ -78,6 +78,10 @@ DEFAULT_LOG_DIR = BASE_DIR / "logs"
 DEFAULT_LOG_LEVEL = os.environ.get("PIPELINE_LOG_LEVEL", "INFO")
 DEFAULT_MAX_EPISODES = 0
 DEFAULT_MODEL = "nova-2"
+DEFAULT_CHROMA_DIR = BASE_DIR / "data" / "chroma"
+DEFAULT_CHROMA_COLLECTION = "transcripts"
+DEFAULT_EMBEDDING_CHUNK_SIZE = 450
+DEFAULT_EMBEDDING_CHUNK_OVERLAP = 75
 
 Base = declarative_base(metadata=MetaData())
 
@@ -130,6 +134,12 @@ def parse_iso_datetime(value: Optional[str]) -> Optional[dt.datetime]:
         return dt.datetime.fromisoformat(value_str)
     except Exception:
         return None
+
+
+def env_truthy(value: Optional[str], default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def extract_deepgram_metadata(response_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -253,6 +263,12 @@ class Episode(Base):
 
     podcast = relationship("Podcast", back_populates="episodes")
     transcript = relationship("Transcript", back_populates="episode", uselist=False, cascade="all, delete-orphan")
+    embedding_status = relationship(
+        "EmbeddingStatus",
+        back_populates="episode",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     keywords = relationship(
         "EpisodeKeyword",
         back_populates="episode",
@@ -288,6 +304,22 @@ class Transcript(Base):
     summary = Column(JSON, nullable=True)
 
     episode = relationship("Episode", back_populates="transcript")
+
+
+class EmbeddingStatus(Base):
+    __tablename__ = "embedding_status"
+
+    episode_id = Column(Integer, ForeignKey("episodes.id"), primary_key=True)
+    status = Column(String(32), nullable=False, default="pending")
+    model = Column(String(64), nullable=True)
+    collection = Column(String(128), nullable=True)
+    chunk_count = Column(Integer, nullable=True)
+    word_count = Column(Integer, nullable=True)
+    last_embedded_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    error_message = Column(Text, nullable=True)
+
+    episode = relationship("Episode", back_populates="embedding_status")
 
 
 class EpisodeKeyword(Base):
@@ -929,6 +961,40 @@ class RssTranscriptionPipeline:
 
         self.generate_report()
         self._write_topic_network_cache()
+
+        if env_truthy(os.getenv("AUTO_EMBEDDINGS", "1"), default=True):
+            try:
+                from embedding_pipeline import embed_transcripts
+
+                chroma_dir = Path(os.getenv("CHROMA_DIR", str(DEFAULT_CHROMA_DIR)))
+                collection_name = os.getenv("CHROMA_COLLECTION", DEFAULT_CHROMA_COLLECTION)
+                model = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
+                base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+                try:
+                    chunk_size = int(os.getenv("EMBEDDING_CHUNK_SIZE", str(DEFAULT_EMBEDDING_CHUNK_SIZE)))
+                except ValueError:
+                    chunk_size = DEFAULT_EMBEDDING_CHUNK_SIZE
+                try:
+                    chunk_overlap = int(os.getenv("EMBEDDING_CHUNK_OVERLAP", str(DEFAULT_EMBEDDING_CHUNK_OVERLAP)))
+                except ValueError:
+                    chunk_overlap = DEFAULT_EMBEDDING_CHUNK_OVERLAP
+
+                if chunk_overlap >= chunk_size:
+                    chunk_overlap = max(chunk_size - 1, 0)
+
+                embed_transcripts(
+                    database_url=self.database_url,
+                    chroma_dir=chroma_dir,
+                    collection_name=collection_name,
+                    model=model,
+                    chunk_size=chunk_size,
+                    overlap=chunk_overlap,
+                    base_url=base_url,
+                )
+                logger.info("Embedding pipeline completed for new transcripts.")
+            except Exception as exc:
+                logger.exception("Embedding pipeline failed: %s", exc)
+
         self._emit_progress(
             stage="completed",
             feeds_total=feed_total,
@@ -1135,6 +1201,17 @@ class RssTranscriptionPipeline:
         episode.transcript = transcript
         episode.transcribed_at = dt.datetime.now(dt.timezone.utc)
         episode.deepgram_request_id = transcript_data.get("request_id")
+
+        embedding_status = session.get(EmbeddingStatus, episode.id)
+        if embedding_status is None:
+            embedding_status = EmbeddingStatus(episode_id=episode.id, status="pending")
+            session.add(embedding_status)
+        else:
+            embedding_status.status = "pending"
+            embedding_status.error_message = None
+            embedding_status.chunk_count = None
+            embedding_status.word_count = None
+            embedding_status.last_embedded_at = None
 
         session.add(transcript)
 
